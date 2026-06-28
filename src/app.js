@@ -807,23 +807,11 @@
 
   function renderDataModeNotice() {
     return `
-      <article class="card pad local-notice">
-        <div class="section-head">
-          <div>
-            <h3>自动线上同步</h3>
-            <p class="task-copy">通过访问密码进入后，页面会自动读取 Vercel Blob；修改状态、checkbox、复盘或编辑内容后会自动保存到线上。localStorage 只作为当前浏览器缓存，右侧按钮用于手动重试和备份。</p>
-            <div data-cloud-status>${cloudStatusMarkup()}</div>
-          </div>
-          <div class="notice-actions">
-            <button class="btn" data-action="cloud-load">手动重新读取</button>
-            <button class="ghost-btn" data-action="cloud-save">手动保存一次</button>
-            <button class="ghost-btn" data-action="logout">退出访问</button>
-            <button class="ghost-btn" data-action="export">导出 JSON</button>
-          </div>
-        </div>
+      <div class="sync-strip local-notice">
+        <div data-cloud-status>${cloudStatusMarkup()}</div>
+        <p class="mini-title">自动保存：${state.lastCloudSavedAt ? formatDateTime(state.lastCloudSavedAt) : "等待首次保存"} · 本地缓存：${state.lastSavedAt ? formatDateTime(state.lastSavedAt) : "尚未保存"}</p>
         ${backupReminder()}
-        <p class="mini-title">本地最近保存：${state.lastSavedAt ? formatDateTime(state.lastSavedAt) : "尚未保存"} · 线上最近保存：${state.lastCloudSavedAt ? formatDateTime(state.lastCloudSavedAt) : "尚未保存"} · 最近备份：${state.lastBackupAt ? formatDateTime(state.lastBackupAt) : "尚未导出备份"}</p>
-      </article>
+      </div>
     `;
   }
 
@@ -1370,6 +1358,7 @@
   function renderLibrary() {
     return `
       <div class="library grid">
+        ${renderDataManagementCard()}
         ${librarySource().map((item, index) => `
           <details>
             <summary><span>${escapeHtml(item.title)}</span><button class="ghost-btn" type="button" data-edit-library="${index}">编辑资料</button></summary>
@@ -1377,6 +1366,25 @@
           </details>
         `).join("")}
       </div>
+    `;
+  }
+
+  function renderDataManagementCard() {
+    return `
+      <article class="card pad data-management">
+        <div class="section-head">
+          <div>
+            <h3>数据管理</h3>
+            <p class="task-copy">平时会自动读取和保存到线上。这里保留 JSON 导出/导入，方便备份，或交给 Claude 优化文案后再导入。</p>
+          </div>
+          <div class="notice-actions">
+            <button class="btn" data-action="export">导出 JSON</button>
+            <button class="ghost-btn" data-action="import">导入 JSON</button>
+            <button class="ghost-btn" data-action="logout">退出访问</button>
+          </div>
+        </div>
+        <p class="mini-title">线上最近保存：${state.lastCloudSavedAt ? formatDateTime(state.lastCloudSavedAt) : "尚未保存"} · 最近备份：${state.lastBackupAt ? formatDateTime(state.lastBackupAt) : "尚未导出备份"}</p>
+      </article>
     `;
   }
 
