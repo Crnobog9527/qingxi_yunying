@@ -7,13 +7,13 @@
   "scripts": {
     "dev": "vercel dev",
     "serve": "python3 -m http.server 5173",
-    "build": "echo \"Static site: no build step required\"",
+    "build": "rm -rf public && mkdir -p public && cp index.html public/ && cp -R src public/src",
     "preview": "vercel dev"
   },
   "dependencies": {
     "@vercel/blob": "^2.5.0"
   },
   "devDependencies": {
-    "vercel": "^44.6.0"
+    "vercel": "^54.18.0"
   }
 }
