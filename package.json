@@ -5,13 +5,13 @@
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
-    "dev": "vercel dev",
     "serve": "python3 -m http.server 5173",
-    "build": "rm -rf public && mkdir -p public && cp index.html public/ && cp -R src public/src",
-    "preview": "vercel dev"
+    "build": "rm -rf public && mkdir -p public && cp index.html login.html public/ && cp -R src public/src",
+    "preview": "echo \"Use: pnpm exec vercel dev\""
   },
   "dependencies": {
-    "@vercel/blob": "^2.5.0"
+    "@vercel/blob": "^2.5.0",
+    "@vercel/functions": "^3.7.4"
   },
   "devDependencies": {
     "vercel": "^54.18.0"

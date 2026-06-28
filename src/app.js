@@ -3,7 +3,6 @@
   const FULL_CONTENT = window.QINGXI_FULL_CONTENT || [];
   const STORE_KEY = "qingxi_xhs_workbench_v1";
   const LEGACY_STORE_KEY = "qingxi-xhs-workbench-v1";
-  const CLOUD_AUTH_KEY = "qingxi_xhs_cloud_auth_v1";
   const DATA_VERSION = 3;
   const TODAY = new Date();
   const NAV = [
@@ -46,7 +45,6 @@
     message: "",
   };
   let state = loadState();
-  let cloudAuth = loadCloudAuth();
 
   function todayIso() {
     const d = new Date();
@@ -157,32 +155,12 @@
     localStorage.setItem(STORE_KEY, JSON.stringify(serializableState()));
   }
 
-  function loadCloudAuth() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(CLOUD_AUTH_KEY) || "{}");
-      return {
-        enabled: Boolean(parsed.enabled && parsed.token),
-        token: parsed.token || "",
-      };
-    } catch {
-      return { enabled: false, token: "" };
-    }
-  }
-
-  function saveCloudAuth(next) {
-    cloudAuth = {
-      enabled: Boolean(next.enabled && next.token),
-      token: next.token || "",
-    };
-    localStorage.setItem(CLOUD_AUTH_KEY, JSON.stringify(cloudAuth));
-  }
-
   function canUseCloudApi() {
     return window.location.protocol !== "file:";
   }
 
   function isCloudReady() {
-    return canUseCloudApi() && cloudAuth.enabled && cloudAuth.token;
+    return canUseCloudApi();
   }
 
   function setCloudStatus(mode, message) {
@@ -211,11 +189,13 @@
       ...options,
       headers: {
         "Content-Type": "application/json",
-        "X-Qingxi-Token": cloudAuth.token,
         ...(options.headers || {}),
       },
     });
     const payload = await response.json().catch(() => ({}));
+    if (response.status === 401 || response.status === 403) {
+      redirectToLogin();
+    }
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.message || `请求失败：${response.status}`);
     }
@@ -240,7 +220,7 @@
 
   async function saveCloudNow({ silent = false } = {}) {
     if (!isCloudReady()) {
-      if (!silent) alert("请先设置线上保存口令。");
+      if (!silent) alert("当前环境不能调用线上 API。");
       return false;
     }
     try {
@@ -264,7 +244,7 @@
 
   async function loadCloudNow({ silent = false, auto = false } = {}) {
     if (!isCloudReady()) {
-      if (!silent) alert("请先设置线上保存口令。");
+      if (!silent) alert("当前环境不能调用线上 API。");
       return false;
     }
     if (!auto && !confirm("这会用线上数据覆盖当前浏览器缓存。建议先导出当前 JSON 备份。是否继续？")) {
@@ -305,26 +285,9 @@
     }
   }
 
-  function setupCloudToken() {
-    if (!canUseCloudApi()) {
-      alert("直接打开 index.html 时不能使用 Vercel API。请部署到 Vercel，或本地使用 vercel dev。");
-      return;
-    }
-    const token = prompt("请输入线上保存口令。这个口令需要和 Vercel 环境变量 QINGXI_ADMIN_TOKEN 一致。", cloudAuth.token || "");
-    if (!token) return;
-    saveCloudAuth({ enabled: true, token: token.trim() });
-    setCloudStatus("loading", "线上保存已启用，正在自动读取线上数据...");
-    loadCloudNow({ silent: true, auto: true }).then((loaded) => {
-      if (!loaded) saveCloudNow({ silent: true });
-    });
-    render();
-  }
-
-  function disableCloudSync() {
-    if (!confirm("只会关闭当前浏览器的线上同步口令，不会删除 Vercel Blob 里的线上数据。是否继续？")) return;
-    saveCloudAuth({ enabled: false, token: "" });
-    setCloudStatus("idle", "已关闭当前浏览器的线上同步。");
-    render();
+  function redirectToLogin() {
+    const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.location.href = `/login.html?next=${encodeURIComponent(next)}`;
   }
 
   function currentDayFromDate(startDate) {
@@ -815,13 +778,13 @@
         <div class="section-head">
           <div>
             <h3>自动线上同步</h3>
-            <p class="task-copy">打开页面会自动读取 Vercel Blob；修改状态、checkbox、复盘或编辑内容后会自动保存到线上。localStorage 只作为当前浏览器缓存，右侧按钮用于口令更新和手动重试。</p>
+            <p class="task-copy">通过访问密码进入后，页面会自动读取 Vercel Blob；修改状态、checkbox、复盘或编辑内容后会自动保存到线上。localStorage 只作为当前浏览器缓存，右侧按钮用于手动重试和备份。</p>
             <div data-cloud-status>${cloudStatusMarkup()}</div>
           </div>
           <div class="notice-actions">
-            <button class="btn" data-action="cloud-setup">${cloudAuth.enabled ? "更新线上口令" : "连接线上存储"}</button>
-            <button class="ghost-btn" data-action="cloud-load">手动重新读取</button>
+            <button class="btn" data-action="cloud-load">手动重新读取</button>
             <button class="ghost-btn" data-action="cloud-save">手动保存一次</button>
+            <button class="ghost-btn" data-action="logout">退出访问</button>
             <button class="ghost-btn" data-action="export">导出 JSON</button>
           </div>
         </div>
@@ -835,9 +798,6 @@
     if (!canUseCloudApi()) {
       return `<div class="backup-reminder">当前是 file:// 直接打开，不能调用 Vercel API。部署到 Vercel 或使用 <code>vercel dev</code> 后可线上保存。</div>`;
     }
-    if (!cloudAuth.enabled) {
-      return `<div class="cloud-status idle">线上存储未连接。输入一次保存口令后，本浏览器会自动读取和自动保存。</div>`;
-    }
     const labels = {
       idle: "已连接",
       saving: "保存中",
@@ -845,7 +805,7 @@
       ok: "正常",
       error: "异常",
     };
-    return `<div class="cloud-status ${cloudStatus.mode}">${labels[cloudStatus.mode] || "已连接"}：${escapeHtml(cloudStatus.message || "已启用自动读取和自动保存。")}</div>`;
+    return `<div class="cloud-status ${cloudStatus.mode}">${labels[cloudStatus.mode] || "已连接"}：${escapeHtml(cloudStatus.message || "已通过访问密码保护，并启用自动读取和自动保存。")}</div>`;
   }
 
   function backupReminder() {
@@ -1361,13 +1321,12 @@
     return `
       <div class="grid cols-2">
         <article class="card pad wide-card">
-          <h3 style="margin-top:0">线上保存设置</h3>
-          <p class="task-copy">当前版本使用 Vercel Blob 保存完整工作台 JSON。输入一次线上口令后，之后打开页面会自动读取线上数据；任何修改都会自动保存到线上。浏览器里的 localStorage 只是缓存。</p>
+          <h3 style="margin-top:0">访问密码与线上同步</h3>
+          <p class="task-copy">当前版本使用一个访问密码保护整个工作台。密码通过后，页面会自动读取 Vercel Blob 中的完整工作台 JSON；任何修改都会自动保存到线上。浏览器里的 localStorage 只是缓存。</p>
           <div class="pill-row">
-            <button class="btn" data-action="cloud-setup">${cloudAuth.enabled ? "更新线上口令" : "连接线上存储"}</button>
-            <button class="ghost-btn" data-action="cloud-load">手动重新读取</button>
+            <button class="btn" data-action="cloud-load">手动重新读取</button>
             <button class="ghost-btn" data-action="cloud-save">手动保存一次</button>
-            ${cloudAuth.enabled ? `<button class="danger-btn" data-action="cloud-disable">关闭当前浏览器同步</button>` : ""}
+            <button class="ghost-btn" data-action="logout">退出访问</button>
           </div>
           <div style="margin-top:12px" data-cloud-status>${cloudStatusMarkup()}</div>
           <p class="mini-title" style="margin-top:12px">线上最近保存：${state.lastCloudSavedAt ? formatDateTime(state.lastCloudSavedAt) : "尚未保存"} · 线上最近读取：${state.lastCloudLoadedAt ? formatDateTime(state.lastCloudLoadedAt) : "尚未读取"}</p>
@@ -1378,7 +1337,7 @@
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">为什么换浏览器可能看不到数据？</h3>
-          <p class="task-copy">没有连接线上口令时，页面只会先显示当前浏览器缓存。换浏览器后，请先点“连接线上存储”并输入同一个口令，页面会自动拉取线上数据。</p>
+          <p class="task-copy">新浏览器第一次打开会先进入访问密码页。密码通过后，页面会自动拉取线上数据；如果网络暂时失败，才会先显示本地缓存。</p>
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">每天怎么备份？</h3>
@@ -1386,15 +1345,15 @@
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">换电脑前怎么迁移？</h3>
-          <p class="task-copy">在新电脑打开页面，输入线上保存口令，页面会自动读取 Blob 里的最新数据。稳妥起见，旧电脑也可以先导出 JSON 备份。</p>
+          <p class="task-copy">在新电脑打开页面，输入访问密码，页面会自动读取 Blob 里的最新数据。稳妥起见，旧电脑也可以先导出 JSON 备份。</p>
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">数据丢失时怎么办？</h3>
-          <p class="task-copy">先尝试连接线上存储并读取。如果线上数据也异常，再找最近导出的 JSON 备份导入恢复。</p>
+          <p class="task-copy">先尝试手动重新读取线上数据。如果线上数据也异常，再找最近导出的 JSON 备份导入恢复。</p>
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">推荐使用方式</h3>
-          <p class="task-copy">日常用固定 Vercel 地址打开；一个人编辑进度，摄影师只看拍摄任务。不要把线上保存口令发给不需要改数据的人。</p>
+          <p class="task-copy">日常用固定域名打开；一个人编辑进度，摄影师只看拍摄任务。不要把访问密码发给不需要改数据的人。</p>
         </article>
         <article class="card pad wide-card">
           <h3 style="margin-top:0">备份与恢复</h3>
@@ -1852,10 +1811,6 @@
         resetAllLocalData();
         return;
       }
-      if (action === "cloud-setup") {
-        setupCloudToken();
-        return;
-      }
       if (action === "cloud-load") {
         loadCloudNow({ silent: false });
         return;
@@ -1864,8 +1819,8 @@
         saveCloudNow({ silent: false });
         return;
       }
-      if (action === "cloud-disable") {
-        disableCloudSync();
+      if (action === "logout") {
+        logout();
         return;
       }
     }
@@ -2058,6 +2013,14 @@
     saveState({ allowOverwriteAfterError: true });
     render();
     alert("已清空本地状态、checkbox、复盘数据和手动编辑内容。");
+  }
+
+  async function logout() {
+    try {
+      await fetch("/api/auth-logout", { method: "POST" });
+    } finally {
+      redirectToLogin();
+    }
   }
 
   render();

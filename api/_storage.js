@@ -9,32 +9,6 @@ export function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
-export function verifyAdminToken(request) {
-  const expected = process.env.QINGXI_ADMIN_TOKEN;
-  if (!expected) {
-    return {
-      ok: false,
-      status: 500,
-      message: "服务端未设置 QINGXI_ADMIN_TOKEN，无法启用线上保存。",
-    };
-  }
-
-  const headerToken = request.headers["x-qingxi-token"];
-  const authHeader = request.headers.authorization || "";
-  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  const received = Array.isArray(headerToken) ? headerToken[0] : headerToken || bearerToken;
-
-  if (!received) {
-    return { ok: false, status: 401, message: "请先输入线上保存口令。" };
-  }
-
-  if (received !== expected) {
-    return { ok: false, status: 403, message: "线上保存口令不正确。" };
-  }
-
-  return { ok: true };
-}
-
 export async function readJsonBody(request) {
   if (request.body && typeof request.body === "object" && !Buffer.isBuffer(request.body)) {
     return request.body;

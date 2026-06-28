@@ -1,4 +1,5 @@
-import { readJsonBody, saveWorkbenchBlob, sendJson, verifyAdminToken } from "./_storage.js";
+import { requestHasSession } from "./_session.js";
+import { readJsonBody, saveWorkbenchBlob, sendJson } from "./_storage.js";
 
 export default async function handler(request, response) {
   if (request.method !== "POST") {
@@ -6,9 +7,8 @@ export default async function handler(request, response) {
     return;
   }
 
-  const auth = verifyAdminToken(request);
-  if (!auth.ok) {
-    sendJson(response, auth.status, { ok: false, message: auth.message });
+  if (!requestHasSession(request)) {
+    sendJson(response, 401, { ok: false, message: "请先输入访问密码。" });
     return;
   }
 
