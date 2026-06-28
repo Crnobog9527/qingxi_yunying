@@ -123,6 +123,103 @@
     };
   }
 
+  function editableTaskFromBaseData(task = {}, full = {}) {
+    return {
+      ...task,
+      contentType: full.category || task.contentType || task.rawType,
+      topic: full.topic || task.topic || task.theme,
+      mainProduct: full.mainProduct || task.mainProduct || task.product,
+      highClickTitle: full.highClickTitle || task.highClickTitle || task.title,
+      titleDirection: full.titleDirection || task.titleDirection || task.copyFocus,
+      titleReason: full.titleReason || task.titleReason || "",
+      coverText: full.coverText || task.coverText || "",
+      altTitles: Array.isArray(full.altTitles) ? full.altTitles : arrayField(task.altTitles, []),
+      bodyCopy: full.bodyCopy || task.bodyCopy || "",
+      imagePlan: Array.isArray(full.imagePlan) ? full.imagePlan : arrayField(task.imagePlan, []),
+      tags: Array.isArray(full.tags) ? full.tags : arrayField(task.tags, []),
+      seoReason: full.seoReason || task.seoReason || "",
+      copyReason: full.copyReason || task.copyReason || "",
+      operationJudge: full.operationJudge || task.operationJudge || task.conversion,
+      rawType: full.category || task.rawType || task.contentType,
+      theme: full.topic || task.theme || task.topic,
+      title: full.highClickTitle || task.title || task.highClickTitle,
+      product: full.mainProduct || task.product || task.mainProduct,
+      shootingTask: Array.isArray(full.imagePlan) && full.imagePlan.length
+        ? full.imagePlan.join("；")
+        : task.shootingTask,
+      copyFocus: full.titleDirection || task.copyFocus || task.titleDirection,
+      conversion: full.operationJudge || task.conversion || task.operationJudge,
+    };
+  }
+
+  function editsFromBaseData(baseData = {}) {
+    const edits = {
+      tasks: {},
+      products: {},
+      library: {},
+    };
+    const contentPlan = Array.isArray(baseData.contentPlan) ? baseData.contentPlan : [];
+    const fullContent = Array.isArray(baseData.fullContent) ? baseData.fullContent : [];
+    contentPlan.forEach((task) => {
+      if (!task || task.day === undefined) return;
+      const full = fullContent.find((item) => Number(item?.day) === Number(task.day)) || {};
+      edits.tasks[task.day] = editableTaskFromBaseData(task, full);
+    });
+    fullContent.forEach((full) => {
+      if (!full || full.day === undefined || edits.tasks[full.day]) return;
+      edits.tasks[full.day] = editableTaskFromBaseData({ day: full.day }, full);
+    });
+    if (Array.isArray(baseData.products)) {
+      baseData.products.forEach((product, index) => {
+        if (product && typeof product === "object") edits.products[index] = product;
+      });
+    }
+    if (Array.isArray(baseData.library)) {
+      baseData.library.forEach((item, index) => {
+        if (item && typeof item === "object") edits.library[index] = item;
+      });
+    }
+    return edits;
+  }
+
+  function hasBaseDataOverrides(baseData = {}) {
+    if (!baseData || typeof baseData !== "object") return false;
+    const pairs = [
+      [baseData.contentPlan, DATA.contentPlan],
+      [baseData.fullContent, FULL_CONTENT],
+      [baseData.products, DATA.products],
+      [baseData.library, DATA.library],
+    ];
+    return pairs.some(([incoming, current]) => Array.isArray(incoming)
+      && JSON.stringify(incoming) !== JSON.stringify(current));
+  }
+
+  function stateFromDataPayload(payload, metadata = {}) {
+    const next = payload?.userState || payload?.state || payload;
+    if (!next || typeof next !== "object") throw new Error("备份文件缺少用户进度数据。");
+    const normalized = normalizeState({
+      ...next,
+      ...metadata,
+      version: DATA_VERSION,
+    });
+    const baseEdits = editsFromBaseData(payload?.baseData);
+    const preferBaseData = hasBaseDataOverrides(payload?.baseData);
+    return normalizeState({
+      ...normalized,
+      edits: {
+        tasks: preferBaseData
+          ? { ...(normalized.edits?.tasks || {}), ...baseEdits.tasks }
+          : { ...baseEdits.tasks, ...(normalized.edits?.tasks || {}) },
+        products: preferBaseData
+          ? { ...(normalized.edits?.products || {}), ...baseEdits.products }
+          : { ...baseEdits.products, ...(normalized.edits?.products || {}) },
+        library: preferBaseData
+          ? { ...(normalized.edits?.library || {}), ...baseEdits.library }
+          : { ...baseEdits.library, ...(normalized.edits?.library || {}) },
+      },
+    });
+  }
+
   function serializableState(extra = {}) {
     const {
       sourceKey,
@@ -260,16 +357,9 @@
         return false;
       }
 
-      const remoteState = result.data?.userState || result.data?.state;
-      if (!remoteState || typeof remoteState !== "object") {
-        throw new Error("线上数据缺少 userState/state。");
-      }
-
       const loadedAt = nowIso();
-      state = normalizeState({
-        ...remoteState,
+      state = stateFromDataPayload(result.data, {
         lastCloudLoadedAt: loadedAt,
-        version: DATA_VERSION,
       });
       storageLoadError = null;
       saveState({ lastCloudLoadedAt: loadedAt, allowOverwriteAfterError: true, skipCloudSave: true });
@@ -1994,13 +2084,9 @@
     reader.onload = () => {
       try {
         const parsed = JSON.parse(reader.result);
-        const next = parsed.userState || parsed.state || parsed;
-        if (!next || typeof next !== "object") throw new Error("备份文件缺少用户进度数据。");
         const importedAt = nowIso();
-        state = normalizeState({
-          ...next,
+        state = stateFromDataPayload(parsed, {
           importedAt,
-          version: DATA_VERSION,
         });
         storageLoadError = null;
         saveState({ importedAt, allowOverwriteAfterError: true });
