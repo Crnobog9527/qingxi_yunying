@@ -654,9 +654,27 @@
           <section class="section ${activeView === "library" ? "active" : ""}" id="library">${renderLibrary()}</section>
         </main>
       </div>
+      ${renderMobileBottomNav()}
       <div id="modal-root"></div>
     `;
     bindEvents();
+  }
+
+  function renderMobileBottomNav() {
+    return `
+      <nav class="mobile-bottom-nav" aria-label="移动端主导航">
+        ${NAV.map(([id, label]) => `<button class="${activeView === id ? "active" : ""}" data-nav="${id}">${mobileNavLabel(label)}</button>`).join("")}
+      </nav>
+    `;
+  }
+
+  function mobileNavLabel(label) {
+    return label
+      .replace("首页 Dashboard", "首页")
+      .replace("30 天日历", "日历")
+      .replace("任务看板", "看板")
+      .replace("复盘分析", "复盘")
+      .replace("本周复盘", "本周");
   }
 
   function renderTopbar() {
@@ -693,8 +711,19 @@
     const tomorrowTask = getTask(Math.min(30, m.day + 1));
     return `
       ${renderStorageError()}
-      ${renderDataModeNotice()}
-      ${renderRiskAlerts()}
+      <div class="dashboard-today">
+        ${renderTodayExecutionCard(todayTask, todayStatus)}
+      </div>
+      <div class="dashboard-alerts">
+        ${renderRiskAlerts()}
+        ${renderDataModeNotice()}
+      </div>
+      <div class="quick-task-grid dashboard-quick" style="margin-top:16px">
+        ${quickTaskPanel("今日", todayTask)}
+        ${quickTaskPanel("明日", tomorrowTask)}
+        ${weeklyTaskPanel(m.week)}
+      </div>
+
       <div class="grid cols-4" id="dashboard-counters">
         ${statCard("30 天总进度", `${m.progress}%`, "已发布或已复盘计入发文完成", m.progress)}
         ${statCard("本周已完成", `${m.weekDone}`, `第 ${m.week} 周已发布/复盘数量`)}
@@ -711,47 +740,54 @@
         ${miniStatus("累计到店桌数", m.totals.visits)}
       </div>
 
-      <div class="quick-task-grid" style="margin-top:16px">
-        ${quickTaskPanel("今日", todayTask)}
-        ${quickTaskPanel("明日", tomorrowTask)}
-        ${weeklyTaskPanel(m.week)}
-      </div>
-
       <div class="grid cols-2" style="margin-top:16px">
-        <article class="card today-card">
-          <div class="today-hero">
-            <span class="status-pill" data-status="${todayStatus}">${todayStatus}</span>
-            <h2>Day ${todayTask.day} · ${escapeHtml(todayTask.theme)}</h2>
-            <p class="task-copy">${escapeHtml(todayTask.highClickTitle || todayTask.title)}</p>
+        ${renderTodayExecutionCard(todayTask, todayStatus, "desktop")}
+        ${renderChecklistCard()}
+      </div>
+    `;
+  }
+
+  function renderTodayExecutionCard(todayTask, todayStatus, variant = "mobile") {
+    return `
+      <article class="card today-card ${variant === "desktop" ? "desktop-today-card" : "mobile-first-today-card"}">
+        <div class="today-hero">
+          <span class="status-pill" data-status="${todayStatus}">${todayStatus}</span>
+          <h2>Day ${todayTask.day} · ${escapeHtml(todayTask.theme)}</h2>
+          <p class="task-copy">${escapeHtml(todayTask.highClickTitle || todayTask.title)}</p>
+        </div>
+        <div class="today-body grid">
+          <div class="pill-row">
+            <span class="pill">第 ${campaignWeek(todayTask.day)} 周</span>
+            <span class="pill">${todayTask.contentType || todayTask.category}</span>
+            <span class="pill">${todayTask.mainProduct || todayTask.product}</span>
+            <span class="pill">${isoForDay(todayTask.day)}</span>
           </div>
-          <div class="today-body grid">
-            <div class="pill-row">
-              <span class="pill">第 ${campaignWeek(todayTask.day)} 周</span>
-              <span class="pill">${todayTask.contentType || todayTask.category}</span>
-              <span class="pill">${todayTask.mainProduct || todayTask.product}</span>
-              <span class="pill">${isoForDay(todayTask.day)}</span>
-            </div>
-            ${infoBlock("今日高点击率标题", todayTask.highClickTitle || todayTask.title)}
-            ${infoBlock("今日主推产品", todayTask.mainProduct || todayTask.product)}
-            ${infoBlock("今日封面短文案", todayTask.coverText || "未设置")}
-            ${infoBlock("今日运营判断点", todayTask.operationJudge || todayTask.conversion)}
-            ${infoBlock("今日拍摄任务", todayTask.shootingTask)}
+          ${infoBlock("今日主推产品", todayTask.mainProduct || todayTask.product)}
+          ${infoBlock("今日封面短文案", todayTask.coverText || "未设置")}
+          ${infoBlock("今日运营判断点", todayTask.operationJudge || todayTask.conversion)}
+          ${infoBlock("今日拍摄任务", todayTask.shootingTask)}
+          <div class="mobile-collapsible-info">
             ${infoBlock("文案重点", todayTask.copyFocus)}
             ${infoBlock("转化动作", todayTask.conversion)}
-            <div>
-              <p class="mini-title">当前状态</p>
-              ${statusButtons(todayTask.day)}
-            </div>
-            <button class="btn" data-open-day="${todayTask.day}">打开今日详情</button>
           </div>
-        </article>
-        <article class="card pad">
-          <h3 style="margin-top:0">发布前检查清单</h3>
-          <ul class="quick-list">
-            ${DATA.checklist.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-          </ul>
-        </article>
-      </div>
+          <div>
+            <p class="mini-title">当前状态</p>
+            ${statusButtons(todayTask.day)}
+          </div>
+          <button class="btn" data-open-day="${todayTask.day}">打开今日详情</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderChecklistCard() {
+    return `
+      <article class="card pad checklist-card">
+        <h3 style="margin-top:0">发布前检查清单</h3>
+        <ul class="quick-list">
+          ${DATA.checklist.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      </article>
     `;
   }
 
@@ -958,32 +994,46 @@
       const productOk = filters.product === "全部茶饮" || (task.mainProduct || task.product).includes(filters.product);
       return weekOk && categoryOk && statusOk && productOk;
     });
+    const hasActiveFilters = filters.week !== "全部周"
+      || filters.category !== "全部内容"
+      || filters.status !== "全部状态"
+      || filters.product !== "全部茶饮";
+    const filterOpen = !isCompactViewport() || hasActiveFilters;
     return `
-      <div class="calendar-tools">
-        <select class="field" data-filter="week">
-          <option value="全部周" ${filters.week === "全部周" ? "selected" : ""}>全部周</option>
-          <option value="1" ${filters.week === "1" ? "selected" : ""}>第 1 周</option>
-          <option value="2" ${filters.week === "2" ? "selected" : ""}>第 2 周</option>
-          <option value="3" ${filters.week === "3" ? "selected" : ""}>第 3 周</option>
-          <option value="4" ${filters.week === "4" ? "selected" : ""}>第 4 周</option>
-        </select>
-        <select class="field" data-filter="category">
-          ${categories.map((item) => `<option value="${item}" ${filters.category === item ? "selected" : ""}>${item}</option>`).join("")}
-        </select>
-        <select class="field" data-filter="status">
-          <option value="全部状态" ${filters.status === "全部状态" ? "selected" : ""}>全部状态</option>
-          ${DATA.STATUSES.map((item) => `<option value="${item}" ${filters.status === item ? "selected" : ""}>${item}</option>`).join("")}
-        </select>
-        <select class="field" data-filter="product">
-          ${products.map((item) => `<option value="${item}" ${filters.product === item ? "selected" : ""}>${item}</option>`).join("")}
-        </select>
-        <button class="ghost-btn" data-action="reset-filters">重置筛选</button>
-        <span class="status-pill">共 ${tasks.length} 天</span>
-      </div>
+      <details class="filter-panel" ${filterOpen ? "open" : ""}>
+        <summary>
+          <span>筛选内容日历</span>
+          <span class="status-pill">共 ${tasks.length} 天</span>
+        </summary>
+        <div class="calendar-tools">
+          <select class="field" data-filter="week">
+            <option value="全部周" ${filters.week === "全部周" ? "selected" : ""}>全部周</option>
+            <option value="1" ${filters.week === "1" ? "selected" : ""}>第 1 周</option>
+            <option value="2" ${filters.week === "2" ? "selected" : ""}>第 2 周</option>
+            <option value="3" ${filters.week === "3" ? "selected" : ""}>第 3 周</option>
+            <option value="4" ${filters.week === "4" ? "selected" : ""}>第 4 周</option>
+          </select>
+          <select class="field" data-filter="category">
+            ${categories.map((item) => `<option value="${item}" ${filters.category === item ? "selected" : ""}>${item}</option>`).join("")}
+          </select>
+          <select class="field" data-filter="status">
+            <option value="全部状态" ${filters.status === "全部状态" ? "selected" : ""}>全部状态</option>
+            ${DATA.STATUSES.map((item) => `<option value="${item}" ${filters.status === item ? "selected" : ""}>${item}</option>`).join("")}
+          </select>
+          <select class="field" data-filter="product">
+            ${products.map((item) => `<option value="${item}" ${filters.product === item ? "selected" : ""}>${item}</option>`).join("")}
+          </select>
+          <button class="ghost-btn" data-action="reset-filters">重置筛选</button>
+        </div>
+      </details>
       <div class="calendar-grid">
         ${tasks.length ? tasks.map(renderTaskCard).join("") : `<div class="empty">没有符合当前筛选条件的任务。</div>`}
       </div>
     `;
+  }
+
+  function isCompactViewport() {
+    return typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches;
   }
 
   function renderTaskCard(task) {
@@ -1003,7 +1053,7 @@
           <span class="pill">${task.contentType || task.category}</span>
           <span class="pill">${task.mainProduct || task.product}</span>
         </div>
-        ${infoBlock("封面短文案", task.coverText || "未设置")}
+        <div class="calendar-cover-note">${infoBlock("封面短文案", task.coverText || "未设置")}</div>
         <div class="card-actions">
           <select class="status-select" data-status-select="${task.day}">
             ${DATA.STATUSES.map((statusName) => `<option value="${statusName}" ${statusName === status ? "selected" : ""}>${statusName}</option>`).join("")}
@@ -1017,7 +1067,23 @@
 
   function renderKanban() {
     return `
-      <div class="kanban">
+      <div class="mobile-kanban-list">
+        ${DATA.STATUSES.map((status) => {
+          const tasks = taskSource().filter((task) => getStatus(task.day) === status);
+          return `
+            <details class="card pad kanban-mobile-group" ${tasks.length ? "open" : ""}>
+              <summary>
+                <span>${status}</span>
+                <span class="status-pill">${tasks.length}</span>
+              </summary>
+              <div class="kanban-mobile-cards">
+                ${tasks.length ? tasks.map(renderKanbanCard).join("") : `<div class="empty">暂无任务</div>`}
+              </div>
+            </details>
+          `;
+        }).join("")}
+      </div>
+      <div class="kanban desktop-kanban">
         ${DATA.STATUSES.map((status) => {
           const tasks = taskSource().filter((task) => getStatus(task.day) === status);
           return `
@@ -1337,113 +1403,137 @@
             </div>
           </div>
           <div class="modal-body">
-            <article class="card pad">
-              <div class="section-head">
-                <h3>一、核心信息</h3>
-                <button class="ghost-btn" data-copy="copy" data-day="${task.day}">复制发布文案模板</button>
-              </div>
-              <div class="detail-grid">
-                ${infoBlock("Day", `Day ${task.day}`)}
-                ${infoBlock("内容类型", task.contentType || task.rawType || task.category)}
-                ${infoBlock("主题", task.topic || task.theme)}
-                ${infoBlock("主推产品", task.mainProduct || task.product)}
-                ${infoBlock("高点击率标题", task.highClickTitle || task.title)}
-                ${infoBlock("封面短文案", task.coverText || "未设置")}
-              </div>
-            </article>
-
-            <article class="card pad">
-              <div class="section-head">
-                <h3>二、标题策略</h3>
-              </div>
-              <div class="detail-grid">
-                ${infoBlock("标题方向建议", task.titleDirection || openingDirection(task))}
-                ${infoBlock("标题为什么这样写", task.titleReason || "沿用原始标题策略。")}
-              </div>
-              <div style="margin-top:14px">
-                <p class="mini-title">备选标题</p>
-                <div class="quick-list compact-list">
-                  ${(task.altTitles || []).map((title) => `<div>${escapeHtml(title)}</div>`).join("") || `<div>未设置</div>`}
+            <details class="card pad detail-accordion detail-execute" open>
+              <summary>执行信息</summary>
+              <div class="accordion-body">
+                <div class="section-head">
+                  <h3>一、核心信息</h3>
+                  <button class="ghost-btn" data-copy="copy" data-day="${task.day}">复制发布文案模板</button>
+                </div>
+                <div class="detail-grid">
+                  ${infoBlock("Day", `Day ${task.day}`)}
+                  ${infoBlock("内容类型", task.contentType || task.rawType || task.category)}
+                  ${infoBlock("主题", task.topic || task.theme)}
+                  ${infoBlock("主推产品", task.mainProduct || task.product)}
+                  ${infoBlock("高点击率标题", task.highClickTitle || task.title)}
+                  ${infoBlock("封面短文案", task.coverText || "未设置")}
                 </div>
               </div>
-            </article>
+            </details>
 
-            <article class="card pad">
-              <div class="section-head">
-                <h3>三、完整正文</h3>
-                <button class="ghost-btn" data-copy="body" data-day="${task.day}">复制正文</button>
-              </div>
-              <div class="body-copy-box">${formatMultiline(task.bodyCopy || publishTemplate(task))}</div>
-            </article>
-
-            <article class="card pad">
-              <div class="section-head">
-                <h3>四、图文配图建议</h3>
-                <button class="ghost-btn" data-copy="shooting" data-day="${task.day}">复制拍摄清单</button>
-              </div>
-              <div class="image-plan-list">
-                ${(task.imagePlan || []).map((item, index) => `
-                  <div class="shot-item">
-                    <p class="mini-title">图 ${index + 1}</p>
-                    <p class="task-copy">${escapeHtml(item)}</p>
+            <details class="card pad detail-accordion" open>
+              <summary>文案标题</summary>
+              <div class="accordion-body">
+                <div class="section-head">
+                  <h3>二、标题策略</h3>
+                </div>
+                <div class="detail-grid">
+                  ${infoBlock("标题方向建议", task.titleDirection || openingDirection(task))}
+                  ${infoBlock("标题为什么这样写", task.titleReason || "沿用原始标题策略。")}
+                </div>
+                <div style="margin-top:14px">
+                  <p class="mini-title">备选标题</p>
+                  <div class="quick-list compact-list">
+                    ${(task.altTitles || []).map((title) => `<div>${escapeHtml(title)}</div>`).join("") || `<div>未设置</div>`}
                   </div>
-                `).join("")}
+                </div>
               </div>
-            </article>
+            </details>
 
-            <article class="card pad">
-              <div class="section-head">
-                <h3>五、标签</h3>
-                <button class="ghost-btn" data-copy="tags" data-day="${task.day}">复制标签</button>
+            <details class="card pad detail-accordion" open>
+              <summary>完整正文</summary>
+              <div class="accordion-body">
+                <div class="section-head">
+                  <h3>三、完整正文</h3>
+                  <button class="ghost-btn" data-copy="body" data-day="${task.day}">复制正文</button>
+                </div>
+                <div class="body-copy-box">${formatMultiline(task.bodyCopy || publishTemplate(task))}</div>
               </div>
-              <div class="pill-row">${(task.tags || []).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("")}</div>
-            </article>
+            </details>
 
-            <article class="card pad">
-              <h3 style="margin-top:0">六、运营判断</h3>
-              <div class="detail-grid">
-                ${infoBlock("标签 SEO 原因", task.seoReason || "未设置")}
-                ${infoBlock("文案理由", task.copyReason || "未设置")}
-                ${infoBlock("运营判断点", task.operationJudge || task.conversion || "未设置")}
+            <details class="card pad detail-accordion" open>
+              <summary>摄影清单</summary>
+              <div class="accordion-body">
+                <div class="section-head">
+                  <h3>四、图文配图建议</h3>
+                  <button class="ghost-btn" data-copy="shooting" data-day="${task.day}">复制拍摄清单</button>
+                </div>
+                <div class="image-plan-list">
+                  ${(task.imagePlan || []).map((item, index) => `
+                    <div class="shot-item">
+                      <p class="mini-title">图 ${index + 1}</p>
+                      <p class="task-copy">${escapeHtml(item)}</p>
+                    </div>
+                  `).join("")}
+                </div>
               </div>
-            </article>
+            </details>
 
-            <article class="card pad">
-              <h3 style="margin-top:0">C. 发布检查</h3>
-              <div class="checklist">
-                ${DATA.checklist.map((label) => `
-                  <label class="check-item">
-                    <input type="checkbox" data-check="${escapeHtml(label)}" data-day="${task.day}" ${checks[label] ? "checked" : ""} />
-                    <span>${escapeHtml(label)}</span>
-                  </label>
-                `).join("")}
+            <details class="card pad detail-accordion" open>
+              <summary>标签与运营判断</summary>
+              <div class="accordion-body">
+                <div class="section-head">
+                  <h3>五、标签</h3>
+                  <button class="ghost-btn" data-copy="tags" data-day="${task.day}">复制标签</button>
+                </div>
+                <div class="pill-row">${(task.tags || []).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("")}</div>
+                <h3>六、运营判断</h3>
+                <div class="detail-grid">
+                  ${infoBlock("标签 SEO 原因", task.seoReason || "未设置")}
+                  ${infoBlock("文案理由", task.copyReason || "未设置")}
+                  ${infoBlock("运营判断点", task.operationJudge || task.conversion || "未设置")}
+                </div>
               </div>
-            </article>
+            </details>
 
-            <article class="card pad">
+            <details class="card pad detail-accordion" open>
+              <summary>发布检查</summary>
+              <div class="accordion-body">
+                <h3 style="margin-top:0">C. 发布检查</h3>
+                <div class="checklist">
+                  ${DATA.checklist.map((label) => `
+                    <label class="check-item">
+                      <input type="checkbox" data-check="${escapeHtml(label)}" data-day="${task.day}" ${checks[label] ? "checked" : ""} />
+                      <span>${escapeHtml(label)}</span>
+                    </label>
+                  `).join("")}
+                </div>
+              </div>
+            </details>
+
+            <article class="card pad detail-status-card">
               <h3 style="margin-top:0">当前状态</h3>
               ${statusButtons(task.day)}
             </article>
 
-            <article class="card pad">
-              <h3 style="margin-top:0">D. 数据复盘</h3>
-              <div class="review-grid">
-                ${REVIEW_FIELDS.map(([key, label, type]) => `
-                  <label>
-                    ${label}
-                    <input class="detail-input" type="${type}" value="${escapeHtml(review[key] ?? "")}" data-review="${key}" data-review-type="${type}" data-day="${task.day}" />
+            <details class="card pad detail-accordion" open>
+              <summary>数据复盘</summary>
+              <div class="accordion-body">
+                <h3 style="margin-top:0">D. 数据复盘</h3>
+                <div class="review-grid">
+                  ${REVIEW_FIELDS.map(([key, label, type]) => `
+                    <label>
+                      ${label}
+                      <input class="detail-input" type="${type}" value="${escapeHtml(review[key] ?? "")}" data-review="${key}" data-review-type="${type}" data-day="${task.day}" />
+                    </label>
+                  `).join("")}
+                </div>
+                <div class="grid cols-2" style="margin-top:12px">
+                  <label class="text-field">用户主要问题
+                    <textarea class="detail-textarea" data-review="userQuestions" data-review-type="text" data-day="${task.day}">${escapeHtml(review.userQuestions || "")}</textarea>
                   </label>
-                `).join("")}
+                  <label class="text-field">复盘备注
+                    <textarea class="detail-textarea" data-review="notes" data-review-type="text" data-day="${task.day}">${escapeHtml(review.notes || "")}</textarea>
+                  </label>
+                </div>
               </div>
-              <div class="grid cols-2" style="margin-top:12px">
-                <label class="text-field">用户主要问题
-                  <textarea class="detail-textarea" data-review="userQuestions" data-review-type="text" data-day="${task.day}">${escapeHtml(review.userQuestions || "")}</textarea>
-                </label>
-                <label class="text-field">复盘备注
-                  <textarea class="detail-textarea" data-review="notes" data-review-type="text" data-day="${task.day}">${escapeHtml(review.notes || "")}</textarea>
-                </label>
-              </div>
-            </article>
+            </details>
+          </div>
+          <div class="modal-mobile-bar">
+            <select class="status-select" data-status-select="${task.day}">
+              ${DATA.STATUSES.map((statusName) => `<option value="${statusName}" ${statusName === status ? "selected" : ""}>${statusName}</option>`).join("")}
+            </select>
+            <button class="ghost-btn" data-close-modal>关闭</button>
           </div>
         </aside>
       </div>
