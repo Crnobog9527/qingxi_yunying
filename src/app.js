@@ -13,7 +13,6 @@
     ["analytics", "复盘分析"],
     ["weekly", "本周复盘"],
     ["library", "资料库"],
-    ["localHelp", "使用说明"],
   ];
 
   const REVIEW_FIELDS = [
@@ -653,7 +652,6 @@
           <section class="section ${activeView === "analytics" ? "active" : ""}" id="analytics">${renderAnalytics()}</section>
           <section class="section ${activeView === "weekly" ? "active" : ""}" id="weekly">${renderWeekly()}</section>
           <section class="section ${activeView === "library" ? "active" : ""}" id="library">${renderLibrary()}</section>
-          <section class="section ${activeView === "localHelp" ? "active" : ""}" id="localHelp">${renderLocalHelp()}</section>
         </main>
       </div>
       <div id="modal-root"></div>
@@ -671,7 +669,6 @@
       analytics: "复盘分析",
       weekly: "本周复盘",
       library: "运营资料库",
-      localHelp: "使用说明",
     };
     return `
       <div class="topbar">
@@ -1313,57 +1310,6 @@
             <div class="library-content">${item.html}</div>
           </details>
         `).join("")}
-      </div>
-    `;
-  }
-
-  function renderLocalHelp() {
-    return `
-      <div class="grid cols-2">
-        <article class="card pad wide-card">
-          <h3 style="margin-top:0">访问密码与线上同步</h3>
-          <p class="task-copy">当前版本使用一个访问密码保护整个工作台。密码通过后，页面会自动读取 Vercel Blob 中的完整工作台 JSON；任何修改都会自动保存到线上。浏览器里的 localStorage 只是缓存。</p>
-          <div class="pill-row">
-            <button class="btn" data-action="cloud-load">手动重新读取</button>
-            <button class="ghost-btn" data-action="cloud-save">手动保存一次</button>
-            <button class="ghost-btn" data-action="logout">退出访问</button>
-          </div>
-          <div style="margin-top:12px" data-cloud-status>${cloudStatusMarkup()}</div>
-          <p class="mini-title" style="margin-top:12px">线上最近保存：${state.lastCloudSavedAt ? formatDateTime(state.lastCloudSavedAt) : "尚未保存"} · 线上最近读取：${state.lastCloudLoadedAt ? formatDateTime(state.lastCloudLoadedAt) : "尚未读取"}</p>
-        </article>
-        <article class="card pad">
-          <h3 style="margin-top:0">数据保存在哪里？</h3>
-          <p class="task-copy">主要数据保存到 Vercel Blob 的一个 JSON 文件里；当前浏览器还会保存一份缓存，localStorage key 是 <code>${STORE_KEY}</code>。</p>
-        </article>
-        <article class="card pad">
-          <h3 style="margin-top:0">为什么换浏览器可能看不到数据？</h3>
-          <p class="task-copy">新浏览器第一次打开会先进入访问密码页。密码通过后，页面会自动拉取线上数据；如果网络暂时失败，才会先显示本地缓存。</p>
-        </article>
-        <article class="card pad">
-          <h3 style="margin-top:0">每天怎么备份？</h3>
-          <p class="task-copy">日常修改会自动保存到线上。每天运营结束后仍建议点“导出 JSON”，额外留一份本地备份文件。</p>
-        </article>
-        <article class="card pad">
-          <h3 style="margin-top:0">换电脑前怎么迁移？</h3>
-          <p class="task-copy">在新电脑打开页面，输入访问密码，页面会自动读取 Blob 里的最新数据。稳妥起见，旧电脑也可以先导出 JSON 备份。</p>
-        </article>
-        <article class="card pad">
-          <h3 style="margin-top:0">数据丢失时怎么办？</h3>
-          <p class="task-copy">先尝试手动重新读取线上数据。如果线上数据也异常，再找最近导出的 JSON 备份导入恢复。</p>
-        </article>
-        <article class="card pad">
-          <h3 style="margin-top:0">推荐使用方式</h3>
-          <p class="task-copy">日常用固定域名打开；一个人编辑进度，摄影师只看拍摄任务。不要把访问密码发给不需要改数据的人。</p>
-        </article>
-        <article class="card pad wide-card">
-          <h3 style="margin-top:0">备份与恢复</h3>
-          <div class="pill-row">
-            <button class="btn" data-action="export">导出今日备份</button>
-            <button class="ghost-btn" data-action="import">导入 JSON</button>
-            <button class="danger-btn" data-action="reset-all-local">重置全部本地数据</button>
-          </div>
-          <p class="mini-title" style="margin-top:12px">本地最近保存：${state.lastSavedAt ? formatDateTime(state.lastSavedAt) : "尚未保存"} · 最近导入：${state.importedAt ? formatDateTime(state.importedAt) : "尚未导入"} · 最近备份：${state.lastBackupAt ? formatDateTime(state.lastBackupAt) : "尚未导出备份"}</p>
-        </article>
       </div>
     `;
   }
