@@ -1,13 +1,69 @@
-# 清熙小院小红书 30 天起号本地运营工作台
+# 清熙小院小红书 30 天起号运营工作台
 
-这是一个 local-first 单机网页工具，只给一个人在固定电脑、固定浏览器里本地使用。
+这是一个给清熙小院内部使用的小红书运营工作台。页面本身部署到 Vercel，运营数据使用 Vercel Blob 保存为一个线上 JSON 文件，同时保留浏览器 localStorage 作为本地缓存和兜底。
 
-## 日常打开方式
+不使用 Supabase、Firebase 或传统数据库。
 
-推荐在项目目录启动一个固定本地地址：
+## 数据保存方式
+
+- 线上主存储：Vercel Blob，默认文件名 `qingxi-workbench.json`
+- 本地缓存：当前浏览器 localStorage
+- 本地缓存 key：`qingxi_xhs_workbench_v1`
+- 线上口令缓存 key：`qingxi_xhs_cloud_auth_v1`
+
+保存内容包括 30 天任务状态、发布检查 checkbox、复盘数据、备注、当前查看 day、手动编辑内容、产品库、资料库和完整 30 天基础内容。
+
+## Vercel 环境变量
+
+部署前需要在 Vercel Project 里配置：
+
+```text
+QINGXI_ADMIN_TOKEN=你自己设置的管理口令
+BLOB_READ_WRITE_TOKEN=Vercel Blob 自动提供
+QINGXI_BLOB_PATH=qingxi-workbench.json
+QINGXI_BLOB_ACCESS=private
+```
+
+说明：
+
+- `QINGXI_ADMIN_TOKEN` 是页面里“连接线上存储”时输入的口令。
+- `BLOB_READ_WRITE_TOKEN` 由 Vercel Blob Store 绑定项目后自动注入。
+- `QINGXI_BLOB_PATH` 可不填，默认就是 `qingxi-workbench.json`。
+- `QINGXI_BLOB_ACCESS` 建议使用 `private`。
+
+## 部署到 Vercel
+
+1. 在 Vercel 新建 Project，导入 GitHub 仓库 `Crnobog9527/qingxi_yunying`。
+2. 在 Storage / Blob 中创建并绑定一个 Blob Store。
+3. 在 Project Settings / Environment Variables 中设置 `QINGXI_ADMIN_TOKEN`。
+4. 部署完成后打开线上地址。
+5. 页面顶部点击“连接线上存储”，输入同一个口令。
+6. 第一次连接时，如果线上还没有数据，页面会把当前本地进度保存到线上。
+
+## 本地开发
+
+安装依赖：
 
 ```bash
-python3 -m http.server 5173
+pnpm install
+```
+
+启动带 API Routes 的本地开发环境：
+
+```bash
+pnpm run dev
+```
+
+然后打开 Vercel CLI 给出的本地地址，通常是：
+
+```text
+http://localhost:3000
+```
+
+如果只是查看静态页面，也可以运行：
+
+```bash
+pnpm run serve
 ```
 
 然后打开：
@@ -16,43 +72,22 @@ python3 -m http.server 5173
 http://localhost:5173
 ```
 
-这样每天使用的是同一个浏览器域名，localStorage 数据更稳定。
+但 `python3 -m http.server` 只会启动静态文件，不能调用 `/api/load-data` 和 `/api/save-data`，因此不能测试线上 Blob 保存。
 
-## 是否需要 npm
+## 日常使用建议
 
-当前项目不是 Vite / React 项目，没有构建步骤，不需要：
+- 日常使用固定的 Vercel 页面地址。
+- 每次换电脑或换浏览器，先点击“连接线上存储”，再点“从线上读取”。
+- 重要节点仍建议点击“导出 JSON”，留一份本地备份。
+- 不要把 `QINGXI_ADMIN_TOKEN` 发给不需要改数据的人。
+- 如果页面提示线上保存失败，先导出 JSON 备份，再检查 Vercel 环境变量和 Blob Store 绑定。
+
+## 构建
+
+当前项目是静态页面 + Vercel API Routes，没有前端构建步骤：
 
 ```bash
-npm install
-npm run dev
-npm run build
-npm run preview
+pnpm run build
 ```
 
-页面由 `index.html`、`src/app.js`、`src/data.js`、`src/fullContent.js` 和 `src/styles.css` 直接运行。
-
-## 直接打开 index.html
-
-直接双击 `index.html` 也能使用，但浏览器会使用 `file://` 路径保存本地数据。如果以后移动文件夹、换路径、换浏览器，可能看不到原来的进度。
-
-更稳的方式是每天通过固定地址 `http://localhost:5173` 打开。
-
-## 数据保存在哪里
-
-运营进度保存在当前浏览器的 localStorage 中，key 为：
-
-```text
-qingxi_xhs_workbench_v1
-```
-
-包含任务状态、发布检查、复盘数据、手动编辑内容、最近保存时间和最近备份时间。
-
-## 备份建议
-
-每天运营结束后，在页面里点击“导出今日备份”，保存下载的 JSON 文件。
-
-换电脑、换浏览器、清缓存前，请先导出 JSON，再到新环境导入。
-
-## 数据丢失时
-
-先找最近导出的 JSON 备份，在页面里导入恢复。没有备份时，只能恢复原始 30 天内容，无法找回已清除的本地进度。
+该命令只输出提示，用于说明项目不需要打包。

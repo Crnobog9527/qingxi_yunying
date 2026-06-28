@@ -179,6 +179,13 @@ button {
   justify-content: flex-end;
 }
 
+.notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .btn,
 .ghost-btn,
 .status-btn {
@@ -203,6 +210,29 @@ button {
   padding: 8px 12px;
   color: #fffdf8;
   background: var(--danger);
+}
+
+.cloud-status {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(82, 109, 74, 0.24);
+  border-radius: var(--radius);
+  color: var(--bamboo);
+  background: rgba(120, 147, 106, 0.1);
+  line-height: 1.6;
+}
+
+.cloud-status.saving,
+.cloud-status.loading {
+  color: var(--tea);
+  border-color: rgba(154, 107, 63, 0.28);
+  background: rgba(199, 154, 98, 0.12);
+}
+
+.cloud-status.error {
+  color: var(--danger);
+  border-color: rgba(169, 84, 65, 0.32);
+  background: rgba(169, 84, 65, 0.09);
 }
 
 .ghost-btn:hover,
