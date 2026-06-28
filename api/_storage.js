@@ -55,26 +55,51 @@ export async function blobToText(blobResult) {
   if (typeof blobResult.arrayBuffer === "function") {
     return Buffer.from(await blobResult.arrayBuffer()).toString("utf8");
   }
+  if (blobResult.stream) {
+    return readableStreamToText(blobResult.stream);
+  }
   if (blobResult.body) {
-    const chunks = [];
-    for await (const chunk of blobResult.body) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    return readableStreamToText(blobResult.body);
+  }
+  return String(blobResult);
+}
+
+async function readableStreamToText(stream) {
+  const chunks = [];
+  if (typeof stream.getReader === "function") {
+    const reader = stream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(Buffer.isBuffer(value) ? value : Buffer.from(value));
+      }
+    } finally {
+      reader.releaseLock?.();
     }
     return Buffer.concat(chunks).toString("utf8");
   }
-  return String(blobResult);
+
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 export async function loadWorkbenchBlob() {
   try {
     const blob = await get(DATA_BLOB_PATH, { access: BLOB_ACCESS });
+    if (!blob || blob.statusCode === 404) return { exists: false };
+    if (blob.statusCode && blob.statusCode !== 200) {
+      throw new Error(`Blob 读取失败：HTTP ${blob.statusCode}`);
+    }
     const text = await blobToText(blob);
     if (!text.trim()) return { exists: false };
     return {
       exists: true,
       data: JSON.parse(text),
-      pathname: DATA_BLOB_PATH,
-      etag: blob.etag || "",
+      pathname: blob.blob?.pathname || DATA_BLOB_PATH,
+      etag: blob.blob?.etag || blob.etag || "",
     };
   } catch (error) {
     const message = String(error?.message || error);

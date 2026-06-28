@@ -199,10 +199,11 @@
 
   function scheduleCloudSave() {
     if (!isCloudReady()) return;
+    setCloudStatus("saving", "已记录更改，正在自动保存到线上...");
     window.clearTimeout(cloudSaveTimer);
     cloudSaveTimer = window.setTimeout(() => {
       saveCloudNow({ silent: true });
-    }, 900);
+    }, 500);
   }
 
   async function cloudRequest(path, options = {}) {
@@ -285,15 +286,6 @@
         throw new Error("线上数据缺少 userState/state。");
       }
 
-      if (auto && state.lastSavedAt && remoteState.lastSavedAt) {
-        const localTime = new Date(state.lastSavedAt).getTime();
-        const remoteTime = new Date(remoteState.lastSavedAt).getTime();
-        if (localTime > remoteTime) {
-          setCloudStatus("idle", "本地数据比线上新，下一次修改会自动保存到线上。");
-          return false;
-        }
-      }
-
       const loadedAt = nowIso();
       state = normalizeState({
         ...remoteState,
@@ -302,7 +294,7 @@
       });
       storageLoadError = null;
       saveState({ lastCloudLoadedAt: loadedAt, allowOverwriteAfterError: true, skipCloudSave: true });
-      setCloudStatus("ok", `已读取线上数据：${formatDateTime(loadedAt)}`);
+      setCloudStatus("ok", `已自动读取线上数据：${formatDateTime(loadedAt)}`);
       render();
       if (!silent) alert(`线上读取成功：${formatDateTime(loadedAt)}`);
       return true;
@@ -321,7 +313,7 @@
     const token = prompt("请输入线上保存口令。这个口令需要和 Vercel 环境变量 QINGXI_ADMIN_TOKEN 一致。", cloudAuth.token || "");
     if (!token) return;
     saveCloudAuth({ enabled: true, token: token.trim() });
-    setCloudStatus("idle", "线上保存已启用，正在尝试读取线上数据...");
+    setCloudStatus("loading", "线上保存已启用，正在自动读取线上数据...");
     loadCloudNow({ silent: true, auto: true }).then((loaded) => {
       if (!loaded) saveCloudNow({ silent: true });
     });
@@ -822,14 +814,14 @@
       <article class="card pad local-notice">
         <div class="section-head">
           <div>
-            <h3>线上保存模式</h3>
-            <p class="task-copy">运营数据会保存到 Vercel Blob，当前浏览器仍保留 localStorage 缓存。建议重要节点继续导出 JSON 备份；换电脑时输入同一个线上保存口令即可读取线上数据。</p>
+            <h3>自动线上同步</h3>
+            <p class="task-copy">打开页面会自动读取 Vercel Blob；修改状态、checkbox、复盘或编辑内容后会自动保存到线上。localStorage 只作为当前浏览器缓存，右侧按钮用于口令更新和手动重试。</p>
             <div data-cloud-status>${cloudStatusMarkup()}</div>
           </div>
           <div class="notice-actions">
             <button class="btn" data-action="cloud-setup">${cloudAuth.enabled ? "更新线上口令" : "连接线上存储"}</button>
-            <button class="ghost-btn" data-action="cloud-load">从线上读取</button>
-            <button class="ghost-btn" data-action="cloud-save">保存到线上</button>
+            <button class="ghost-btn" data-action="cloud-load">手动重新读取</button>
+            <button class="ghost-btn" data-action="cloud-save">手动保存一次</button>
             <button class="ghost-btn" data-action="export">导出 JSON</button>
           </div>
         </div>
@@ -844,7 +836,7 @@
       return `<div class="backup-reminder">当前是 file:// 直接打开，不能调用 Vercel API。部署到 Vercel 或使用 <code>vercel dev</code> 后可线上保存。</div>`;
     }
     if (!cloudAuth.enabled) {
-      return `<div class="cloud-status idle">线上存储未连接。请先设置保存口令。</div>`;
+      return `<div class="cloud-status idle">线上存储未连接。输入一次保存口令后，本浏览器会自动读取和自动保存。</div>`;
     }
     const labels = {
       idle: "已连接",
@@ -853,7 +845,7 @@
       ok: "正常",
       error: "异常",
     };
-    return `<div class="cloud-status ${cloudStatus.mode}">${labels[cloudStatus.mode] || "已连接"}：${escapeHtml(cloudStatus.message || "修改内容后会自动保存到线上。")}</div>`;
+    return `<div class="cloud-status ${cloudStatus.mode}">${labels[cloudStatus.mode] || "已连接"}：${escapeHtml(cloudStatus.message || "已启用自动读取和自动保存。")}</div>`;
   }
 
   function backupReminder() {
@@ -1370,11 +1362,11 @@
       <div class="grid cols-2">
         <article class="card pad wide-card">
           <h3 style="margin-top:0">线上保存设置</h3>
-          <p class="task-copy">当前版本使用 Vercel Blob 保存完整工作台 JSON。浏览器里仍保留一份 localStorage 缓存，用来加快打开速度，也方便断网时查看最近数据。</p>
+          <p class="task-copy">当前版本使用 Vercel Blob 保存完整工作台 JSON。输入一次线上口令后，之后打开页面会自动读取线上数据；任何修改都会自动保存到线上。浏览器里的 localStorage 只是缓存。</p>
           <div class="pill-row">
             <button class="btn" data-action="cloud-setup">${cloudAuth.enabled ? "更新线上口令" : "连接线上存储"}</button>
-            <button class="ghost-btn" data-action="cloud-load">从线上读取</button>
-            <button class="ghost-btn" data-action="cloud-save">保存到线上</button>
+            <button class="ghost-btn" data-action="cloud-load">手动重新读取</button>
+            <button class="ghost-btn" data-action="cloud-save">手动保存一次</button>
             ${cloudAuth.enabled ? `<button class="danger-btn" data-action="cloud-disable">关闭当前浏览器同步</button>` : ""}
           </div>
           <div style="margin-top:12px" data-cloud-status>${cloudStatusMarkup()}</div>
@@ -1386,7 +1378,7 @@
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">为什么换浏览器可能看不到数据？</h3>
-          <p class="task-copy">没有连接线上口令时，页面只会先显示当前浏览器缓存。换浏览器后，请先点“连接线上存储”并输入同一个口令，再从线上读取。</p>
+          <p class="task-copy">没有连接线上口令时，页面只会先显示当前浏览器缓存。换浏览器后，请先点“连接线上存储”并输入同一个口令，页面会自动拉取线上数据。</p>
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">每天怎么备份？</h3>
@@ -1394,7 +1386,7 @@
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">换电脑前怎么迁移？</h3>
-          <p class="task-copy">在新电脑打开 Vercel 页面，输入线上保存口令，然后点击“从线上读取”。稳妥起见，旧电脑也可以先导出 JSON 备份。</p>
+          <p class="task-copy">在新电脑打开页面，输入线上保存口令，页面会自动读取 Blob 里的最新数据。稳妥起见，旧电脑也可以先导出 JSON 备份。</p>
         </article>
         <article class="card pad">
           <h3 style="margin-top:0">数据丢失时怎么办？</h3>
