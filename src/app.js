@@ -632,16 +632,11 @@
         <aside class="sidebar">
           <div class="brand">
             <h1>清熙小院<br />30 天起号工作台</h1>
-            <p>线上保存 + 本地缓存：拍摄、发布、复盘、预约转化一处管理。</p>
+            <p>拍摄、发布、复盘、预约转化一处管理。</p>
           </div>
           <nav class="nav">
             ${NAV.map(([id, label]) => `<button class="${activeView === id ? "active" : ""}" data-nav="${id}">${label}</button>`).join("")}
           </nav>
-          <div class="sidebar-actions">
-            <button class="btn" data-action="export">导出今日备份</button>
-            <button class="ghost-btn" data-action="import">导入 JSON</button>
-            <input class="hide" id="import-file" type="file" accept="application/json" />
-          </div>
         </aside>
         <main class="main">
           ${renderTopbar()}
@@ -655,6 +650,7 @@
         </main>
       </div>
       ${renderMobileBottomNav()}
+      <input class="hide" id="import-file" type="file" accept="application/json" />
       <div id="modal-root"></div>
     `;
     bindEvents();
@@ -680,7 +676,7 @@
   function renderTopbar() {
     const m = metrics();
     const titles = {
-      dashboard: "小红书 30 天起号本地运营工作台",
+      dashboard: "小红书 30 天起号运营工作台",
       calendar: "30 天内容日历",
       kanban: "任务状态看板",
       products: "茶饮产品库",
@@ -693,7 +689,7 @@
         <div>
           <p class="eyebrow">清熙小院 · 新津斑竹林 · 宋式田园小院茶馆</p>
           <h2 class="page-title">${titles[activeView]}</h2>
-          <p class="page-subtitle">Vercel Blob 线上保存，localStorage 本地缓存；不接 Supabase，不做多人协作。</p>
+          <p class="page-subtitle">拍摄、发布、复盘、预约转化一处管理。</p>
         </div>
         <div class="toolbar">
           <label class="mini-title">Day 1 日期</label>
@@ -716,7 +712,6 @@
       </div>
       <div class="dashboard-alerts">
         ${renderRiskAlerts()}
-        ${renderDataModeNotice()}
       </div>
       <div class="quick-task-grid dashboard-quick" style="margin-top:16px">
         ${quickTaskPanel("今日", todayTask)}
@@ -805,16 +800,6 @@
     `;
   }
 
-  function renderDataModeNotice() {
-    return `
-      <div class="sync-strip local-notice">
-        <div data-cloud-status>${cloudStatusMarkup()}</div>
-        <p class="mini-title">自动保存：${state.lastCloudSavedAt ? formatDateTime(state.lastCloudSavedAt) : "等待首次保存"} · 本地缓存：${state.lastSavedAt ? formatDateTime(state.lastSavedAt) : "尚未保存"}</p>
-        ${backupReminder()}
-      </div>
-    `;
-  }
-
   function cloudStatusMarkup() {
     if (!canUseCloudApi()) {
       return `<div class="backup-reminder">当前是 file:// 直接打开，不能调用 Vercel API。部署到 Vercel 或使用 <code>vercel dev</code> 后可线上保存。</div>`;
@@ -827,17 +812,6 @@
       error: "异常",
     };
     return `<div class="cloud-status ${cloudStatus.mode}">${labels[cloudStatus.mode] || "已连接"}：${escapeHtml(cloudStatus.message || "已通过访问密码保护，并启用自动读取和自动保存。")}</div>`;
-  }
-
-  function backupReminder() {
-    if (!needsBackupReminder()) return "";
-    return `<div class="backup-reminder">建议今天结束后导出一次备份。</div>`;
-  }
-
-  function needsBackupReminder() {
-    if (!state.lastBackupAt) return true;
-    const last = new Date(state.lastBackupAt).getTime();
-    return Number.isNaN(last) || Date.now() - last > 24 * 60 * 60 * 1000;
   }
 
   function formatDateTime(value) {
@@ -1383,7 +1357,6 @@
             <button class="ghost-btn" data-action="logout">退出访问</button>
           </div>
         </div>
-        <p class="mini-title">线上最近保存：${state.lastCloudSavedAt ? formatDateTime(state.lastCloudSavedAt) : "尚未保存"} · 最近备份：${state.lastBackupAt ? formatDateTime(state.lastBackupAt) : "尚未导出备份"}</p>
       </article>
     `;
   }

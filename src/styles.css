@@ -142,14 +142,6 @@ button {
   box-shadow: inset 3px 0 0 var(--bamboo);
 }
 
-.sidebar-actions {
-  display: grid;
-  gap: 10px;
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
 .main {
   min-width: 0;
   padding: 28px;
@@ -472,23 +464,6 @@ button {
 
 .local-notice {
   margin-bottom: 16px;
-}
-
-.sync-strip {
-  display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid rgba(82, 109, 74, 0.18);
-  border-radius: var(--radius);
-  background: rgba(255, 253, 248, 0.66);
-}
-
-.sync-strip .cloud-status {
-  margin: 0;
-}
-
-.sync-strip .mini-title {
-  margin: 0;
 }
 
 .data-management h3 {
@@ -1055,7 +1030,6 @@ code {
   .brand h1 br,
   .brand p,
   .sidebar .nav,
-  .sidebar-actions,
   .desktop-today-card,
   .desktop-kanban {
     display: none;
@@ -1120,10 +1094,6 @@ code {
 
   .local-notice.card.pad {
     padding: 12px;
-  }
-
-  .sync-strip {
-    padding: 9px 10px;
   }
 
   .local-notice .section-head {
