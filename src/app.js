@@ -250,7 +250,8 @@
       && JSON.stringify(incoming) !== JSON.stringify(current));
   }
 
-  function stateFromDataPayload(payload, metadata = {}) {
+  function stateFromDataPayload(payload, metadata = {}, options = {}) {
+    const { applyBaseData = true } = options;
     const next = payload?.userState || payload?.state || payload;
     if (!next || typeof next !== "object") throw new Error("备份文件缺少用户进度数据。");
     const normalized = normalizeState({
@@ -258,8 +259,8 @@
       ...metadata,
       version: DATA_VERSION,
     });
-    const baseEdits = editsFromBaseData(payload?.baseData);
-    const preferBaseData = hasBaseDataOverrides(payload?.baseData);
+    const baseEdits = applyBaseData ? editsFromBaseData(payload?.baseData) : { tasks: {}, products: {}, library: {} };
+    const preferBaseData = applyBaseData && hasBaseDataOverrides(payload?.baseData);
     return normalizeState({
       ...normalized,
       edits: {
@@ -516,6 +517,8 @@
       const loadedAt = nowIso();
       state = stateFromDataPayload(result.data, {
         lastCloudLoadedAt: loadedAt,
+      }, {
+        applyBaseData: false,
       });
       lastRemoteRevision = remoteRevision(result);
       storageLoadError = null;
