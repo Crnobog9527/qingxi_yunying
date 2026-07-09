@@ -1,6 +1,8 @@
 import { requestHasSession } from "./_session.js";
 import { loadWorkbenchBlob, readJsonBody, saveWorkbenchBlob, sendJson } from "./_storage.js";
 
+const DATA_VERSION = 5;
+
 function toTimestamp(value) {
   const time = Date.parse(value || "");
   return Number.isFinite(time) ? time : 0;
@@ -49,6 +51,7 @@ function normalizeTodayShootPlan(value) {
 }
 
 function mergeTodayShootPlan(current, incoming) {
+  if (!incoming || typeof incoming !== "object") return current;
   const prev = normalizeTodayShootPlan(current);
   const next = normalizeTodayShootPlan(incoming);
   return toTimestamp(next.updatedAt) >= toTimestamp(prev.updatedAt) ? next : prev;
@@ -56,7 +59,7 @@ function mergeTodayShootPlan(current, incoming) {
 
 export default async function handler(request, response) {
   if (request.method !== "POST") {
-    sendJson(response, 405, { ok: false, message: "只支持 POST 保存。" });
+    sendJson(response, 405, { ok: false, message: "只支持 POST 保存协作更新。" });
     return;
   }
 
@@ -66,38 +69,36 @@ export default async function handler(request, response) {
   }
 
   try {
-    const payload = await readJsonBody(request);
-    if (!payload || typeof payload !== "object") {
-      sendJson(response, 400, { ok: false, message: "保存内容不是有效 JSON。" });
-      return;
-    }
-    if (!payload.userState && !payload.state) {
-      sendJson(response, 400, { ok: false, message: "保存内容缺少 userState/state。" });
+    const patch = await readJsonBody(request);
+    if (!patch || typeof patch !== "object") {
+      sendJson(response, 400, { ok: false, message: "协作更新不是有效 JSON。" });
       return;
     }
 
     const currentBlob = await loadWorkbenchBlob();
     const currentPayload = currentBlob.exists ? currentBlob.data : {};
     const currentState = currentPayload.userState || currentPayload.state || {};
-    const incomingState = payload.userState || payload.state || {};
-    const mergedState = {
-      ...incomingState,
-      shotChecks: mergeShotChecks(currentState.shotChecks || {}, incomingState.shotChecks || {}),
-      todayShootPlan: mergeTodayShootPlan(currentState.todayShootPlan, incomingState.todayShootPlan),
+    const nextState = {
+      ...currentState,
+      version: DATA_VERSION,
+      shotChecks: mergeShotChecks(currentState.shotChecks || {}, patch.shotChecks || {}),
+      todayShootPlan: mergeTodayShootPlan(currentState.todayShootPlan, patch.todayShootPlan),
     };
     const savedAt = new Date().toISOString();
-    const blob = await saveWorkbenchBlob({
-      ...payload,
+    const nextPayload = {
+      ...currentPayload,
+      dataVersion: Math.max(Number(currentPayload.dataVersion || 0), DATA_VERSION),
+      cloudSavedAt: savedAt,
       userState: {
-        ...mergedState,
+        ...nextState,
         lastCloudSavedAt: savedAt,
       },
       state: {
-        ...mergedState,
+        ...nextState,
         lastCloudSavedAt: savedAt,
       },
-      cloudSavedAt: savedAt,
-    });
+    };
+    const blob = await saveWorkbenchBlob(nextPayload);
 
     sendJson(response, 200, {
       ok: true,
@@ -108,7 +109,7 @@ export default async function handler(request, response) {
   } catch (error) {
     sendJson(response, 500, {
       ok: false,
-      message: error?.message || "保存线上数据失败。",
+      message: error?.message || "保存协作更新失败。",
     });
   }
 }

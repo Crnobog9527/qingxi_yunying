@@ -70,17 +70,32 @@ export interface ReviewData {
   notes?: string;
 }
 
+export interface ShotCheck {
+  done: boolean;
+  updatedAt: string;
+}
+
+export interface TodayShootPlan {
+  date: string;
+  selectedDays: number[];
+  updatedAt: string;
+}
+
 export interface PersistedState {
   version: number;
   startDate: string;
   statuses: Record<number, TaskStatus>;
   checks: Record<number, Record<string, boolean>>;
+  shotChecks: Record<number, Record<number, ShotCheck>>;
+  todayShootPlan: TodayShootPlan;
   reviews: Record<number, ReviewData>;
   manualNotes: Record<string, string>;
   currentDay: number;
   importedAt: string;
   lastSavedAt: string;
   lastBackupAt: string;
+  lastCloudSavedAt: string;
+  lastCloudLoadedAt: string;
   edits: {
     tasks: Record<number, Partial<ContentTask>>;
     products: Record<number, Partial<ProductCard>>;

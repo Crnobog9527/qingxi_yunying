@@ -3,10 +3,12 @@
   const FULL_CONTENT = window.QINGXI_FULL_CONTENT || [];
   const STORE_KEY = "qingxi_xhs_workbench_v1";
   const LEGACY_STORE_KEY = "qingxi-xhs-workbench-v1";
-  const DATA_VERSION = 3;
+  const DATA_VERSION = 5;
+  const COLLAB_POLL_MS = 5000;
   const TODAY = new Date();
   const NAV = [
     ["dashboard", "首页 Dashboard"],
+    ["shoot", "今日拍摄计划"],
     ["calendar", "30 天日历"],
     ["kanban", "任务看板"],
     ["products", "产品库"],
@@ -31,6 +33,7 @@
 
   const app = document.getElementById("app");
   let activeView = "dashboard";
+  let shootStep = "select";
   let filters = {
     week: "全部周",
     category: "全部内容",
@@ -43,6 +46,9 @@
     mode: "idle",
     message: "",
   };
+  let collabPollTimer = null;
+  let lastRemoteRevision = "";
+  let isPollingCollab = false;
   let state = loadState();
 
   function todayIso() {
@@ -55,12 +61,60 @@
     return new Date().toISOString();
   }
 
+  function zeroIso() {
+    return new Date(0).toISOString();
+  }
+
+  function toTimestamp(value) {
+    const time = Date.parse(value || "");
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function normalizeShotRecord(value) {
+    if (value && typeof value === "object") {
+      return {
+        done: Boolean(value.done),
+        updatedAt: value.updatedAt || zeroIso(),
+      };
+    }
+    return {
+      done: Boolean(value),
+      updatedAt: zeroIso(),
+    };
+  }
+
+  function normalizeShotChecks(value = {}) {
+    const normalized = {};
+    Object.entries(value || {}).forEach(([day, shots]) => {
+      if (!shots || typeof shots !== "object") return;
+      Object.entries(shots).forEach(([index, record]) => {
+        normalized[day] = normalized[day] || {};
+        normalized[day][index] = normalizeShotRecord(record);
+      });
+    });
+    return normalized;
+  }
+
+  function normalizeTodayShootPlan(value = {}) {
+    const planDate = value?.date === todayIso() ? value.date : todayIso();
+    const selectedDays = value?.date === todayIso() && Array.isArray(value.selectedDays)
+      ? [...new Set(value.selectedDays.map(Number).filter((day) => Number.isInteger(day) && day >= 1 && day <= 30))].sort((a, b) => a - b)
+      : [];
+    return {
+      date: planDate,
+      selectedDays,
+      updatedAt: value?.updatedAt || zeroIso(),
+    };
+  }
+
   function createDefaultState() {
     return {
       version: DATA_VERSION,
       startDate: todayIso(),
       statuses: {},
       checks: {},
+      shotChecks: {},
+      todayShootPlan: normalizeTodayShootPlan(),
       reviews: {},
       manualNotes: {},
       currentDay: currentDayFromDate(todayIso()),
@@ -107,6 +161,8 @@
       sourceKey,
       statuses: parsed.statuses || {},
       checks: parsed.checks || {},
+      shotChecks: normalizeShotChecks(parsed.shotChecks || {}),
+      todayShootPlan: normalizeTodayShootPlan(parsed.todayShootPlan || {}),
       reviews: parsed.reviews || {},
       manualNotes: parsed.manualNotes || {},
       currentDay: parsed.currentDay || fallback.currentDay,
@@ -298,6 +354,99 @@
     return payload;
   }
 
+  function remoteRevision(result) {
+    return result?.etag || result?.data?.cloudSavedAt || result?.data?.userState?.lastCloudSavedAt || result?.data?.state?.lastCloudSavedAt || "";
+  }
+
+  function mergeShotChecks(current = {}, incoming = {}) {
+    let changed = false;
+    const merged = normalizeShotChecks(current);
+    Object.entries(incoming || {}).forEach(([day, shots]) => {
+      if (!shots || typeof shots !== "object") return;
+      merged[day] = merged[day] || {};
+      Object.entries(shots).forEach(([index, value]) => {
+        const next = normalizeShotRecord(value);
+        const prev = merged[day][index] ? normalizeShotRecord(merged[day][index]) : null;
+        if (!prev || toTimestamp(next.updatedAt) > toTimestamp(prev.updatedAt)) {
+          merged[day][index] = next;
+          changed = true;
+        }
+      });
+    });
+    return { value: merged, changed };
+  }
+
+  function mergeTodayShootPlan(current, incoming) {
+    const prev = normalizeTodayShootPlan(current);
+    const next = normalizeTodayShootPlan(incoming);
+    if (toTimestamp(next.updatedAt) > toTimestamp(prev.updatedAt)) {
+      return { value: next, changed: true };
+    }
+    return { value: prev, changed: false };
+  }
+
+  function mergeRemoteCollab(remoteState = {}) {
+    const shots = mergeShotChecks(state.shotChecks || {}, remoteState.shotChecks || {});
+    const plan = mergeTodayShootPlan(state.todayShootPlan, remoteState.todayShootPlan);
+    const changed = shots.changed || plan.changed;
+    if (changed) {
+      state = {
+        ...state,
+        shotChecks: shots.value,
+        todayShootPlan: plan.value,
+      };
+      if (!plan.value.selectedDays.length) shootStep = "select";
+      persistStateLocalOnly();
+    }
+    return changed;
+  }
+
+  async function pollCollabUpdates({ silent = true, rerender = true } = {}) {
+    if (!isCloudReady() || isPollingCollab || document.visibilityState === "hidden") return false;
+    isPollingCollab = true;
+    try {
+      const result = await cloudRequest("/api/load-data");
+      if (!result.exists) return false;
+      const revision = remoteRevision(result);
+      if (revision && revision === lastRemoteRevision) return false;
+      const remoteState = stateFromDataPayload(result.data);
+      const changed = mergeRemoteCollab(remoteState);
+      lastRemoteRevision = revision || lastRemoteRevision;
+      if (changed) {
+        setCloudStatus("ok", "已同步同事的拍摄进度");
+        if (rerender) render();
+      }
+      return changed;
+    } catch (error) {
+      if (!silent) setCloudStatus("error", error?.message || "同步协作进度失败。");
+      return false;
+    } finally {
+      isPollingCollab = false;
+    }
+  }
+
+  async function saveCollabPatch(patch) {
+    if (!isCloudReady()) return false;
+    try {
+      setCloudStatus("saving", "正在同步拍摄进度...");
+      const result = await cloudRequest("/api/save-collab-patch", {
+        method: "POST",
+        body: JSON.stringify({
+          dataVersion: DATA_VERSION,
+          storageKey: STORE_KEY,
+          ...patch,
+        }),
+      });
+      state.lastCloudSavedAt = result.savedAt || nowIso();
+      persistStateLocalOnly();
+      setCloudStatus("ok", `拍摄进度已同步：${formatDateTime(state.lastCloudSavedAt)}`);
+      return true;
+    } catch (error) {
+      setCloudStatus("error", error?.message || "拍摄进度同步失败。");
+      return false;
+    }
+  }
+
   function cloudPayload(savedAt = nowIso()) {
     return {
       dataVersion: DATA_VERSION,
@@ -321,6 +470,7 @@
     }
     try {
       setCloudStatus("saving", "正在保存到线上...");
+      await pollCollabUpdates({ silent: true, rerender: false });
       const savedAt = nowIso();
       const result = await cloudRequest("/api/save-data", {
         method: "POST",
@@ -361,6 +511,7 @@
       state = stateFromDataPayload(result.data, {
         lastCloudLoadedAt: loadedAt,
       });
+      lastRemoteRevision = remoteRevision(result);
       storageLoadError = null;
       saveState({ lastCloudLoadedAt: loadedAt, allowOverwriteAfterError: true, skipCloudSave: true });
       setCloudStatus("ok", `已自动读取线上数据：${formatDateTime(loadedAt)}`);
@@ -416,9 +567,44 @@
     return state.statuses[day] || "未开始";
   }
 
+  function isAtLeastShotCompleteStatus(status) {
+    const shotStatusIndex = statusIndex("已拍摄");
+    const currentIndex = statusIndex(status);
+    return shotStatusIndex >= 0 && currentIndex >= shotStatusIndex;
+  }
+
+  function markAllShotsDoneForDay(day, updatedAt = nowIso()) {
+    const task = getTask(day);
+    const patch = {};
+    state.shotChecks[day] = state.shotChecks[day] || {};
+    (task.imagePlan || []).forEach((_, index) => {
+      const current = normalizeShotRecord(state.shotChecks[day][index]);
+      if (current.done) return;
+      const next = { done: true, updatedAt };
+      state.shotChecks[day][index] = next;
+      patch[index] = next;
+    });
+    return Object.keys(patch).length ? { [day]: patch } : null;
+  }
+
+  function markAllShotsDoneForStatus(day, status) {
+    if (!isAtLeastShotCompleteStatus(status)) return null;
+    return markAllShotsDoneForDay(day);
+  }
+
+  function promoteStatusWhenAllShotsDone(day) {
+    const progress = shotProgress(day);
+    if (!progress.total || progress.done !== progress.total) return false;
+    if (isAtLeastShotCompleteStatus(getStatus(day))) return false;
+    state.statuses[day] = "已拍摄";
+    return true;
+  }
+
   function setStatus(day, status, keepModal = false) {
     state.statuses[day] = status;
+    const shotPatch = markAllShotsDoneForStatus(day, status);
     saveState();
+    if (shotPatch) saveCollabPatch({ shotChecks: shotPatch });
     render();
     if (keepModal) openDetail(day);
   }
@@ -588,6 +774,285 @@
     saveState();
   }
 
+  function setShotCheck(day, index, checked) {
+    const updatedAt = nowIso();
+    state.shotChecks[day] = state.shotChecks[day] || {};
+    state.shotChecks[day][index] = { done: checked, updatedAt };
+    const statusChanged = promoteStatusWhenAllShotsDone(day);
+    saveState({ skipCloudSave: !statusChanged });
+    saveCollabPatch({
+      shotChecks: {
+        [day]: {
+          [index]: state.shotChecks[day][index],
+        },
+      },
+    });
+    refreshAfterShotChange(day, index);
+  }
+
+  function restoreModalScroll(day, index, previousScrollTop, previousTargetTop) {
+    window.requestAnimationFrame(() => {
+      const modal = document.querySelector("[data-modal-panel]");
+      if (!modal) return;
+      const target = Number.isInteger(index)
+        ? modal.querySelector(`[data-shot-toggle][data-day="${day}"][data-shot-index="${index}"]`)
+        : null;
+      if (target && Number.isFinite(previousTargetTop)) {
+        const nextTargetTop = target.getBoundingClientRect().top;
+        modal.scrollTop += nextTargetTop - previousTargetTop;
+        return;
+      }
+      modal.scrollTop = previousScrollTop;
+    });
+  }
+
+  function refreshAfterShotChange(day, index) {
+    const modal = document.querySelector("[data-modal-panel]");
+    if (modal) {
+      const target = Number.isInteger(index)
+        ? modal.querySelector(`[data-shot-toggle][data-day="${day}"][data-shot-index="${index}"]`)
+        : null;
+      const previousScrollTop = modal.scrollTop;
+      const previousTargetTop = target?.getBoundingClientRect().top;
+      render();
+      openDetail(day);
+      restoreModalScroll(day, index, previousScrollTop, previousTargetTop);
+      return;
+    }
+    render();
+  }
+
+  function shotRecord(day, index) {
+    return normalizeShotRecord(state.shotChecks?.[day]?.[index]);
+  }
+
+  function isShotDone(day, index) {
+    return shotRecord(day, index).done;
+  }
+
+  function shotProgress(day) {
+    const task = getTask(day);
+    const total = task.imagePlan?.length || 0;
+    const done = (task.imagePlan || []).filter((_, index) => isShotDone(day, index)).length;
+    return {
+      done,
+      total,
+      percent: total ? Math.round((done / total) * 100) : 0,
+    };
+  }
+
+  function currentTodayShootPlan() {
+    return normalizeTodayShootPlan(state.todayShootPlan);
+  }
+
+  function selectedShootTasks() {
+    return currentTodayShootPlan().selectedDays.map(getTask).filter(Boolean);
+  }
+
+  function selectedShootProducts(tasks = selectedShootTasks()) {
+    const groups = {};
+    tasks.forEach((task) => {
+      const product = String(task.mainProduct || task.product || "未设置产品").trim();
+      groups[product] = groups[product] || { product, days: [] };
+      groups[product].days.push(task.day);
+    });
+    return Object.values(groups).sort((a, b) => a.days[0] - b.days[0]);
+  }
+
+  function setTodayShootPlanDays(selectedDays) {
+    const normalizedDays = [...new Set(selectedDays.map(Number).filter((day) => Number.isInteger(day) && day >= 1 && day <= 30))].sort((a, b) => a - b);
+    const plan = {
+      date: todayIso(),
+      selectedDays: normalizedDays,
+      updatedAt: nowIso(),
+    };
+    state.todayShootPlan = plan;
+    if (!normalizedDays.length) shootStep = "select";
+    saveState({ skipCloudSave: true });
+    saveCollabPatch({ todayShootPlan: plan });
+    render();
+  }
+
+  function toggleTodayShootDay(day, checked) {
+    const plan = currentTodayShootPlan();
+    const selected = new Set(plan.selectedDays);
+    if (checked) selected.add(day);
+    else selected.delete(day);
+    setTodayShootPlanDays([...selected]);
+  }
+
+  function confirmShootPlan() {
+    const selectedTasks = selectedShootTasks();
+    const totalShots = selectedTasks.reduce((sum, task) => sum + (task.imagePlan?.length || 0), 0);
+    if (!selectedTasks.length) {
+      alert("请先勾选今天要拍摄的选题。");
+      return;
+    }
+    const confirmed = confirm(`已选择 ${selectedTasks.length} 个选题，共 ${totalShots} 张配图建议。确认后进入按选题拍摄页面。`);
+    if (!confirmed) return;
+    shootStep = "plan";
+    render();
+  }
+
+  function backToShootSelect() {
+    shootStep = "select";
+    render();
+  }
+
+  function classifyShot(text, task = {}) {
+    const source = `${text} ${task.theme || ""} ${task.highClickTitle || task.title || ""}`;
+    const groups = [
+      { label: "竹林/小院环境", tone: "green", priority: 96, keywords: ["竹林", "竹影", "竹", "小院整体", "环境"] },
+      { label: "小院入口/路线", tone: "blue", priority: 88, keywords: ["入口", "门头", "门帘", "路线", "动线", "过渡", "到店", "公园"] },
+      { label: "茶席桌面", tone: "tea", priority: 92, keywords: ["茶席", "茶桌", "桌面", "桌上", "俯拍"] },
+      { label: "茶饮特写", tone: "tea", priority: 84, keywords: ["茶饮", "茶汤", "茶杯", "拿杯", "特写", "胭脂", "竹涧", "松窗", "古木", "百香果"] },
+      { label: "点心盒/食物", tone: "tea", priority: 76, keywords: ["点心", "点心盒", "水果", "干果", "茶点"] },
+      { label: "人物体验", tone: "warm", priority: 90, keywords: ["女生", "朋友", "聊天", "主理人", "背影", "人物", "客人", "手部", "合影"] },
+      { label: "花园/户外氛围", tone: "green", priority: 78, keywords: ["花园", "花", "户外", "院子", "空院"] },
+      { label: "信息说明图", tone: "blue", priority: 58, keywords: ["信息图", "说明", "提醒", "小卡", "清单", "预约", "人数"] },
+    ];
+    const match = groups.find((group) => group.keywords.some((keyword) => source.includes(keyword)));
+    return match || { label: "特殊补拍", tone: "gray", priority: 40, keywords: [] };
+  }
+
+  function packageActionTitle(label) {
+    const titles = {
+      "竹林/小院环境": "先拍竹林小院通用环境",
+      "小院入口/路线": "集中拍入口和路线动线",
+      "茶席桌面": "合并拍茶席桌面素材",
+      "茶饮特写": "集中补茶饮近景特写",
+      "点心盒/食物": "一次拍完整点心桌面",
+      "人物体验": "安排人物体验和聊天动作",
+      "花园/户外氛围": "补花园户外氛围空镜",
+      "信息说明图": "最后做路线和说明图",
+      "特殊补拍": "单独检查特殊补拍项",
+    };
+    return titles[label] || `集中拍${label}`;
+  }
+
+  function packageInstruction(label) {
+    const instructions = {
+      "竹林/小院环境": "先拍一张能交代小院和竹林关系的竖图，再补 2-3 张竹影、远景和环境细节。",
+      "小院入口/路线": "从公园入口、过渡路段、小院门头按动线拍，方便后续攻略类选题共用。",
+      "茶席桌面": "把茶席、茶杯、桌面、环境放在同一画面里，先拍全景，再拍俯拍和局部。",
+      "茶饮特写": "同一轮把主推茶饮拍齐：杯身、茶汤透光、手拿杯、环境背景各补一张。",
+      "点心盒/食物": "点心盒和茶饮同框先拍完整桌面，再补食物近景，避免每个选题重复摆盘。",
+      "人物体验": "安排人物自然坐下、聊天、拿杯、背影和手部动作，优先抓松弛状态。",
+      "花园/户外氛围": "拍花园、院子、户外座位和空镜，用来补足氛围类选题的过渡画面。",
+      "信息说明图": "等实拍素材完成后再做路线、预约、动作清单等信息图，不占现场拍摄节奏。",
+      "特殊补拍": "这些画面复用度低，放在通用素材拍完后逐条核对补拍。",
+    };
+    return instructions[label] || "把同类画面集中拍完，再回到按选题清单核对遗漏。";
+  }
+
+  function shotSummaryText(text) {
+    return String(text || "")
+      .replace(/^图\s*\d+\s*[：:、.]?\s*/i, "")
+      .replace(/^封面\s*[：:、.]?\s*/i, "封面：")
+      .split(/[。；;]/)[0]
+      .trim()
+      .slice(0, 42);
+  }
+
+  function isCoverShot(text, index) {
+    return Number(index) === 0 || /^封面\s*[：:]/.test(String(text || "").trim());
+  }
+
+  function highValueShot(text) {
+    return /封面|环境|茶席|小院|竹林|人物|茶饮|桌面/.test(text || "") ? 1 : 0;
+  }
+
+  function shootingPackages() {
+    const groups = {};
+    selectedShootTasks().forEach((task) => {
+      (task.imagePlan || []).forEach((text, index) => {
+        if (isShotDone(task.day, index)) return;
+        const shotType = classifyShot(text, task);
+        groups[shotType.label] = groups[shotType.label] || {
+          ...shotType,
+          items: [],
+        };
+        groups[shotType.label].items.push({
+          task,
+          index,
+          text,
+          summary: shotSummaryText(text),
+          highValue: highValueShot(text),
+        });
+      });
+    });
+    return Object.entries(groups)
+      .map(([label, group]) => {
+        const dayCount = new Set(group.items.map((item) => item.task.day)).size;
+        const shotCount = group.items.length;
+        const highValueCount = group.items.reduce((sum, item) => sum + item.highValue, 0);
+        const byDay = group.items.reduce((acc, item) => {
+          acc[item.task.day] = acc[item.task.day] || { task: item.task, items: [] };
+          acc[item.task.day].items.push(item);
+          return acc;
+        }, {});
+        const packageDaySet = new Set(group.items.map((item) => item.task.day));
+        const supplemental = selectedShootTasks()
+          .filter((task) => packageDaySet.has(task.day))
+          .flatMap((task) => (task.imagePlan || [])
+            .map((text, index) => ({ task, index, text, type: classifyShot(text, task) }))
+            .filter((item) => !isShotDone(item.task.day, item.index) && item.type.label !== label)
+            .slice(0, 2));
+        return {
+          ...group,
+          label,
+          actionTitle: packageActionTitle(label),
+          instruction: packageInstruction(label),
+          dayCount,
+          shotCount,
+          highValueCount,
+          byDay: Object.values(byDay).sort((a, b) => a.task.day - b.task.day),
+          supplemental,
+          score: dayCount * 100 + shotCount * 10 + highValueCount * 8 + group.priority,
+        };
+      })
+      .filter((group) => group.dayCount >= 2)
+      .sort((a, b) => b.score - a.score);
+  }
+
+  function sideQuestInstruction(label) {
+    const instructions = {
+      "竹林/小院环境": "顺手多拍 1 张竖图环境、1 张远景和 1 张竹影细节，后面环境类选题可以备用。",
+      "小院入口/路线": "同一位置补 1 张门头/入口、1 张路过动线、1 张带方向感的横图。",
+      "茶席桌面": "茶席不要只拍一张，顺手补全景、俯拍和茶杯近景，后面桌面类图可复用。",
+      "茶饮特写": "顺手补杯身、茶汤透光、手拿杯和带环境背景各一张。",
+      "点心盒/食物": "同一摆盘先拍完整桌面，再补点心盒和茶饮同框近景。",
+      "人物体验": "同一动作多留 2-3 张：聊天、拿杯、背影或手部，方便后面人物类选题备用。",
+      "花园/户外氛围": "顺手补一张空镜、一张带座位关系、一张有光影的氛围图。",
+      "信息说明图": "先把路线、位置或说明所需的实拍底图拍清楚，信息文字后面再补。",
+      "特殊补拍": "这类图复用度不稳定，建议只补一个相近角度作为备用，不自动算其它图完成。",
+    };
+    return instructions[label] || "在当前场景多补 1-2 个相似角度，后面可能用得上。";
+  }
+
+  function sideQuestSuggestions(task, index, text) {
+    if (isCoverShot(text, index)) return [];
+    const currentType = classifyShot(text, task);
+    return selectedShootTasks()
+      .filter((candidateTask) => candidateTask.day > task.day)
+      .flatMap((candidateTask) => (candidateTask.imagePlan || []).map((candidateText, candidateIndex) => ({
+        task: candidateTask,
+        index: candidateIndex,
+        text: candidateText,
+        type: classifyShot(candidateText, candidateTask),
+      })))
+      .filter((candidate) => !isCoverShot(candidate.text, candidate.index)
+        && !isShotDone(candidate.task.day, candidate.index)
+        && candidate.type.label === currentType.label)
+      .slice(0, 4)
+      .map((candidate) => ({
+        day: candidate.task.day,
+        theme: candidate.task.theme,
+        index: candidate.index,
+        summary: shotSummaryText(candidate.text),
+      }));
+  }
+
   function toNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
@@ -728,9 +1193,10 @@
             ${NAV.map(([id, label]) => `<button class="${activeView === id ? "active" : ""}" data-nav="${id}">${label}</button>`).join("")}
           </nav>
         </aside>
-        <main class="main">
+        <main class="main" data-view="${activeView}">
           ${renderTopbar()}
           <section class="section ${activeView === "dashboard" ? "active" : ""}" id="dashboard">${renderDashboard()}</section>
+          <section class="section ${activeView === "shoot" ? "active" : ""}" id="shoot">${renderShootPlan()}</section>
           <section class="section ${activeView === "calendar" ? "active" : ""}" id="calendar">${renderCalendar()}</section>
           <section class="section ${activeView === "kanban" ? "active" : ""}" id="kanban">${renderKanban()}</section>
           <section class="section ${activeView === "products" ? "active" : ""}" id="products">${renderProducts()}</section>
@@ -757,6 +1223,7 @@
   function mobileNavLabel(label) {
     return label
       .replace("首页 Dashboard", "首页")
+      .replace("今日拍摄计划", "拍摄")
       .replace("30 天日历", "日历")
       .replace("任务看板", "看板")
       .replace("复盘分析", "复盘")
@@ -767,6 +1234,7 @@
     const m = metrics();
     const titles = {
       dashboard: "小红书 30 天起号运营工作台",
+      shoot: "今日拍摄计划",
       calendar: "30 天内容日历",
       kanban: "任务状态看板",
       products: "茶饮产品库",
@@ -785,6 +1253,7 @@
           <label class="mini-title">Day 1 日期</label>
           <input class="field" type="date" value="${state.startDate}" data-action="start-date" />
           <span class="status-pill" data-status="已发布">今日 Day ${m.day} / 第 ${m.week} 周</span>
+          <span data-cloud-status>${cloudStatusMarkup()}</span>
         </div>
       </div>
     `;
@@ -915,7 +1384,7 @@
     if (!task) return `<article class="card pad"><h3>${label}</h3><div class="empty">30 天计划已结束。</div></article>`;
     const status = getStatus(task.day);
     return `
-      <article class="card pad quick-task">
+      <article class="card pad quick-task" data-status="${status}">
         <div class="task-meta">
           <span>${label} · Day ${task.day} · ${isoForDay(task.day)}</span>
           <span class="status-pill" data-status="${status}">${status}</span>
@@ -927,7 +1396,7 @@
           <span class="pill">${task.mainProduct || task.product}</span>
         </div>
         <div class="mobile-status-control">
-          <select class="status-select" data-status-select="${task.day}">
+          <select class="status-select" data-status-select="${task.day}" data-status="${status}">
             ${DATA.STATUSES.map((statusName) => `<option value="${statusName}" ${statusName === status ? "selected" : ""}>${statusName}</option>`).join("")}
           </select>
           <button class="ghost-btn" data-open-day="${task.day}">详情</button>
@@ -1023,7 +1492,227 @@
   function statusButtons(day) {
     return `
       <div class="pill-row">
-        ${DATA.STATUSES.map((status) => `<button class="status-btn" data-status-set="${status}" data-day="${day}">${status}</button>`).join("")}
+        ${DATA.STATUSES.map((status) => `<button class="status-btn" data-status-set="${status}" data-day="${day}" data-status="${status}">${status}</button>`).join("")}
+      </div>
+    `;
+  }
+
+  function renderShootProductBar(tasks) {
+    const products = selectedShootProducts(tasks);
+    if (!products.length) return "";
+    return `
+      <article class="card pad shoot-product-bar" aria-label="今日要拍产品">
+        <div class="shoot-product-head">
+          <p class="mini-title">今日拍摄物料总览</p>
+          <h3>今日要拍产品</h3>
+          <p class="task-copy">开拍前核对今天要准备的茶饮/套餐。</p>
+        </div>
+        <div class="shoot-product-chips">
+          ${products.map((item) => `
+            <span class="shoot-product-chip">
+              <strong>${escapeHtml(item.product)}</strong>
+              <em>${item.days.map((day) => `Day ${day}`).join(" / ")}</em>
+            </span>
+          `).join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderShootPlan() {
+    const plan = currentTodayShootPlan();
+    const selected = new Set(plan.selectedDays);
+    const selectedTasks = selectedShootTasks();
+    const totalShots = selectedTasks.reduce((sum, task) => sum + (task.imagePlan?.length || 0), 0);
+    const doneShots = selectedTasks.reduce((sum, task) => sum + shotProgress(task.day).done, 0);
+    const summary = `
+      <article class="card pad shoot-summary">
+        <div>
+          <p class="mini-title">团队共享 · ${escapeHtml(plan.date)}</p>
+          <h3>今日共 ${selectedTasks.length} 个选题，${doneShots}/${totalShots} 张已拍</h3>
+          <div class="progress-track"><div class="progress-bar" style="--progress:${totalShots ? Math.round((doneShots / totalShots) * 100) : 0}%"></div></div>
+        </div>
+        <div class="pill-row">
+          <span class="pill">5 秒近实时同步</span>
+          <span class="pill">${shootStep === "select" ? "第 1 步：选择选题" : "第 2 步：执行拍摄"}</span>
+        </div>
+      </article>
+    `;
+    const selectionPanel = `
+      <article class="card pad">
+        <div class="section-head">
+          <div>
+            <h3>选择今日选题</h3>
+            <p class="task-copy">勾选今天准备一起拍的日历选题，同事登录后会看到同一份计划。</p>
+          </div>
+        </div>
+        <div class="shoot-day-grid">
+          ${taskSource().map((task) => {
+            const progress = shotProgress(task.day);
+            return `
+              <label class="shoot-day-option ${selected.has(task.day) ? "selected" : ""}">
+                <input type="checkbox" data-shoot-day="${task.day}" ${selected.has(task.day) ? "checked" : ""} />
+                <span>
+                  <strong>Day ${task.day} · ${escapeHtml(task.theme)}</strong>
+                  <small>${escapeHtml(task.highClickTitle || task.title)}</small>
+                  <small>产品：${escapeHtml(task.mainProduct || task.product)}</small>
+                  <em>${progress.done}/${progress.total} 已拍</em>
+                </span>
+              </label>
+            `;
+          }).join("")}
+        </div>
+      </article>
+    `;
+    if (shootStep === "select") {
+      return `
+        <div class="shoot-dashboard">
+          ${summary}
+          ${renderShootProductBar(selectedTasks)}
+          ${selectionPanel}
+          <article class="card pad shoot-step-actions">
+            <div>
+              <h3>生成今日拍摄执行页</h3>
+              <p class="task-copy">确认后按选题顺序拍摄；如果当前图片和后续选题相似，会在图片下方提醒顺手补拍。</p>
+            </div>
+            <button class="btn" data-action="confirm-shoot-plan">下一步开始拍摄</button>
+            <span class="task-copy">已选 ${selectedTasks.length} 个选题 · ${totalShots} 张配图建议</span>
+          </article>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="shoot-dashboard">
+        ${summary}
+        ${renderShootProductBar(selectedTasks)}
+        <article class="card pad shoot-step-nav">
+          <div>
+            <h3>今日拍摄执行页</h3>
+            <p class="task-copy">按选题顺序拍摄；每类顺手补拍只提醒一次，避免重复干扰判断。</p>
+          </div>
+          <button class="ghost-btn" data-action="back-shoot-select">返回修改选题</button>
+        </article>
+
+        <article class="card pad">
+          <div class="section-head">
+            <div>
+              <h3>按选题拍摄</h3>
+              <p class="task-copy">未拍图片优先显示；相似场景只作为顺手补拍提醒，不会自动标记后续图片已拍，同类提醒在每个选题内只显示一次。</p>
+            </div>
+          </div>
+          <div class="shoot-task-list">
+            ${selectedTasks.length ? selectedTasks.map(renderShootTaskGroup).join("") : `<div class="empty">先勾选今日要拍摄的选题。</div>`}
+          </div>
+        </article>
+      </div>
+    `;
+  }
+
+  function renderShootingPackageCard(pack, index) {
+    return `
+      <section class="shoot-package-card" data-tone="${pack.tone}">
+        <div class="package-head">
+          <span class="package-rank">优先拍 ${index + 1}</span>
+          <div>
+            <p class="mini-title">${escapeHtml(pack.label)}</p>
+            <h3>${escapeHtml(pack.actionTitle)}</h3>
+          </div>
+          <span class="status-pill">覆盖 ${pack.dayCount} 个选题 / ${pack.shotCount} 张图</span>
+        </div>
+        <p class="package-instruction">${escapeHtml(pack.instruction)}</p>
+        <div class="package-cover-list">
+          ${pack.byDay.map((dayGroup) => `
+            <div class="package-day-block">
+              <strong>Day ${dayGroup.task.day}｜${escapeHtml(dayGroup.task.theme)}</strong>
+              <ul>
+                ${dayGroup.items.map((item) => `
+                  <li>
+                    <span>图 ${item.index + 1}</span>
+                    <em>${escapeHtml(item.summary)}</em>
+                  </li>
+                `).join("")}
+              </ul>
+            </div>
+          `).join("")}
+        </div>
+        ${pack.supplemental.length ? `
+          <div class="package-extra">
+            <strong>仍需单独补拍</strong>
+            <p>${pack.supplemental.slice(0, 4).map((item) => `Day ${item.task.day} 图 ${item.index + 1}：${shotSummaryText(item.text)}`).join(" / ")}</p>
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }
+
+  function renderShootTaskGroup(task) {
+    const progress = shotProgress(task.day);
+    const entries = (task.imagePlan || []).map((item, index) => ({ item, index, done: isShotDone(task.day, index) }));
+    const pending = entries.filter((entry) => !entry.done);
+    const done = entries.filter((entry) => entry.done);
+    const shownSuggestionTypes = new Set();
+    const pendingHtml = pending.map(({ item, index }) => {
+      const typeLabel = classifyShot(item, task).label;
+      const showSideQuest = !shownSuggestionTypes.has(typeLabel);
+      if (showSideQuest) shownSuggestionTypes.add(typeLabel);
+      return renderShootShotCard(task, item, index, { showSideQuest });
+    }).join("");
+    return `
+      <section class="shoot-task-group" data-day="${task.day}">
+        <div class="shoot-task-head">
+          <div>
+            <div class="shoot-task-kicker">
+              <span>Day ${task.day}</span>
+              <em>${escapeHtml(task.contentType || task.category)}</em>
+            </div>
+            <h3>${escapeHtml(task.theme)}</h3>
+            <p class="task-copy">${escapeHtml(task.highClickTitle || task.title)}</p>
+            <div class="pill-row shoot-task-products">
+              <span class="pill">产品：${escapeHtml(task.mainProduct || task.product)}</span>
+            </div>
+          </div>
+          <span class="status-pill">${progress.done}/${progress.total} 已拍</span>
+        </div>
+        <div class="progress-track"><div class="progress-bar" style="--progress:${progress.percent}%"></div></div>
+        <div class="shoot-shot-list">
+          ${pendingHtml || `<div class="empty">这个选题的图片都已标记完成。</div>`}
+        </div>
+        ${done.length ? `
+          <details class="done-shot-panel">
+            <summary>已拍 ${done.length} 张</summary>
+            <div class="shoot-shot-list done">
+              ${done.map(({ item, index }) => renderShotButton(task, item, index, { showDay: true, compact: true })).join("")}
+            </div>
+          </details>
+        ` : ""}
+      </section>
+    `;
+  }
+
+  function renderShootShotCard(task, item, index, options = {}) {
+    const shotType = classifyShot(item, task);
+    const suggestions = options.showSideQuest === false ? [] : sideQuestSuggestions(task, index, item);
+    return `
+      <div class="shoot-shot-card">
+        ${renderShotButton(task, item, index, { showDay: true, compact: true })}
+        ${suggestions.length ? `
+          <div class="side-quest" data-tone="${shotType.tone}">
+            <div class="side-quest-head">
+              <strong>顺手补拍</strong>
+              <span>${escapeHtml(shotType.label)}</span>
+            </div>
+            <p>${escapeHtml(sideQuestInstruction(shotType.label))}</p>
+            <ul>
+              ${suggestions.map((suggestion) => `
+                <li>
+                  <span>Day ${suggestion.day} 图 ${suggestion.index + 1}</span>
+                  <em>${escapeHtml(suggestion.theme)}｜${escapeHtml(suggestion.summary)}</em>
+                </li>
+              `).join("")}
+            </ul>
+          </div>
+        ` : ""}
       </div>
     `;
   }
@@ -1092,7 +1781,7 @@
     const status = getStatus(task.day);
     const isToday = task.day === currentDay();
     return `
-      <article class="task-card ${isToday ? "today" : ""}">
+      <article class="task-card ${isToday ? "today" : ""}" data-status="${status}">
         <div class="task-meta">
           <span>Day ${task.day} · 第 ${campaignWeek(task.day)} 周 · ${formatDate(dateForDay(task.day))}</span>
           <span class="status-pill" data-status="${status}">${status}</span>
@@ -1107,7 +1796,7 @@
         </div>
         <div class="calendar-cover-note">${infoBlock("封面短文案", task.coverText || "未设置")}</div>
         <div class="card-actions">
-          <select class="status-select" data-status-select="${task.day}">
+          <select class="status-select" data-status-select="${task.day}" data-status="${status}">
             ${DATA.STATUSES.map((statusName) => `<option value="${statusName}" ${statusName === status ? "selected" : ""}>${statusName}</option>`).join("")}
           </select>
           <button class="ghost-btn" data-edit-task="${task.day}">编辑</button>
@@ -1150,9 +1839,11 @@
   }
 
   function renderKanbanCard(task) {
+    const status = getStatus(task.day);
     return `
-      <article class="kanban-card">
+      <article class="kanban-card" data-status="${status}">
         <span class="mini-title">Day ${task.day} · ${isoForDay(task.day)}</span>
+        <span class="status-pill" data-status="${status}">${status}</span>
         <strong>${escapeHtml(task.theme)}</strong>
         <span>${escapeHtml(task.highClickTitle || task.title)}</span>
         <div class="pill-row">
@@ -1451,9 +2142,30 @@
     `;
   }
 
+  function renderShotButton(task, item, index, options = {}) {
+    const isDone = isShotDone(task.day, index);
+    return `
+      <button
+        class="shot-item ${options.compact ? "compact-shot" : ""}"
+        type="button"
+        data-shot-toggle
+        data-day="${task.day}"
+        data-shot-index="${index}"
+        data-shot-done="${isDone ? "true" : "false"}"
+        aria-pressed="${isDone ? "true" : "false"}"
+        aria-label="Day ${task.day} 图 ${index + 1}，${isDone ? "已拍，点击撤销" : "未拍，点击标记已拍"}"
+      >
+        ${isDone ? `<span class="shot-done-badge">已拍</span>` : `<span class="shot-hint">点击标记已拍</span>`}
+        <p class="mini-title">${options.showDay ? `Day ${task.day} · 图 ${index + 1}` : `图 ${index + 1}`}</p>
+        ${options.showTitle ? `<strong class="shot-topic">${escapeHtml(task.theme)}</strong>` : ""}
+        <p class="task-copy">${escapeHtml(item)}</p>
+      </button>
+    `;
+  }
+
   function openDetail(day) {
     state.currentDay = Number(day);
-    saveState();
+    saveState({ skipCloudSave: true });
     const task = getTask(day);
     const status = getStatus(day);
     const review = getReview(day);
@@ -1471,6 +2183,17 @@
             <div class="modal-actions">
               <button class="ghost-btn" data-edit-task="${task.day}">编辑内容</button>
               <button class="ghost-btn" data-close-modal>关闭</button>
+            </div>
+          </div>
+          <div class="modal-status-row" data-status="${status}">
+            <label>
+              <span>当前状态</span>
+              <select class="status-select" data-status-select="${task.day}" data-status="${status}">
+                ${DATA.STATUSES.map((statusName) => `<option value="${statusName}" ${statusName === status ? "selected" : ""}>${statusName}</option>`).join("")}
+              </select>
+            </label>
+            <div class="pill-row">
+              ${DATA.STATUSES.map((statusName) => `<button class="status-btn" data-status-set="${statusName}" data-day="${task.day}" data-status="${statusName}">${statusName}</button>`).join("")}
             </div>
           </div>
           <div class="modal-body">
@@ -1530,12 +2253,7 @@
                   <button class="ghost-btn" data-copy="shooting" data-day="${task.day}">复制拍摄清单</button>
                 </div>
                 <div class="image-plan-list">
-                  ${(task.imagePlan || []).map((item, index) => `
-                    <div class="shot-item">
-                      <p class="mini-title">图 ${index + 1}</p>
-                      <p class="task-copy">${escapeHtml(item)}</p>
-                    </div>
-                  `).join("")}
+                  ${(task.imagePlan || []).map((item, index) => renderShotButton(task, item, index)).join("")}
                 </div>
               </div>
             </details>
@@ -1572,11 +2290,6 @@
               </div>
             </details>
 
-            <article class="card pad detail-status-card">
-              <h3 style="margin-top:0">当前状态</h3>
-              ${statusButtons(task.day)}
-            </article>
-
             <details class="card pad detail-accordion" open>
               <summary>数据复盘</summary>
               <div class="accordion-body">
@@ -1599,12 +2312,6 @@
                 </div>
               </div>
             </details>
-          </div>
-          <div class="modal-mobile-bar">
-            <select class="status-select" data-status-select="${task.day}">
-              ${DATA.STATUSES.map((statusName) => `<option value="${statusName}" ${statusName === status ? "selected" : ""}>${statusName}</option>`).join("")}
-            </select>
-            <button class="ghost-btn" data-close-modal>关闭</button>
           </div>
         </aside>
       </div>
@@ -1862,7 +2569,9 @@
     });
 
     document.querySelectorAll("[data-status-select]").forEach((select) => {
-      select.addEventListener("change", () => setStatus(Number(select.dataset.statusSelect), select.value));
+      select.addEventListener("change", () => {
+        setStatus(Number(select.dataset.statusSelect), select.value, Boolean(select.closest("[data-modal-panel]")));
+      });
     });
 
     const startInput = document.querySelector("[data-action='start-date']");
@@ -1926,6 +2635,14 @@
         saveCloudNow({ silent: false });
         return;
       }
+      if (action === "confirm-shoot-plan") {
+        confirmShootPlan();
+        return;
+      }
+      if (action === "back-shoot-select") {
+        backToShootSelect();
+        return;
+      }
       if (action === "logout") {
         logout();
         return;
@@ -1944,6 +2661,16 @@
         Number(statusButton.dataset.day),
         statusButton.dataset.statusSet,
         Boolean(statusButton.closest("[data-modal-panel]")),
+      );
+      return;
+    }
+
+    const shotButton = event.target.closest("[data-shot-toggle]");
+    if (shotButton) {
+      setShotCheck(
+        Number(shotButton.dataset.day),
+        Number(shotButton.dataset.shotIndex),
+        shotButton.dataset.shotDone !== "true",
       );
       return;
     }
@@ -2016,6 +2743,9 @@
     const target = event.target;
     if (target.matches("[data-check]")) {
       setCheck(Number(target.dataset.day), target.dataset.check, target.checked);
+    }
+    if (target.matches("[data-shoot-day]")) {
+      toggleTodayShootDay(Number(target.dataset.shootDay), target.checked);
     }
   });
 
@@ -2126,8 +2856,23 @@
     }
   }
 
+  function startCollabPolling() {
+    if (!isCloudReady()) return;
+    window.clearInterval(collabPollTimer);
+    collabPollTimer = window.setInterval(() => {
+      pollCollabUpdates({ silent: true, rerender: true });
+    }, COLLAB_POLL_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        pollCollabUpdates({ silent: true, rerender: true });
+      }
+    });
+  }
+
   render();
   if (isCloudReady()) {
-    loadCloudNow({ silent: true, auto: true });
+    loadCloudNow({ silent: true, auto: true }).finally(() => {
+      startCollabPolling();
+    });
   }
 })();
