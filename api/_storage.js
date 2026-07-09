@@ -1,6 +1,8 @@
 import { get, put } from "@vercel/blob";
 
-export const DATA_BLOB_PATH = process.env.QINGXI_BLOB_PATH || "qingxi-workbench.json";
+export const LEGACY_WORKBENCH_PATH = process.env.QINGXI_BLOB_PATH || "qingxi-workbench.json";
+export const CONTENT_BLOB_PATH = process.env.QINGXI_CONTENT_BLOB_PATH || "qingxi/content/latest.json";
+export const PROGRESS_BLOB_PATH = process.env.QINGXI_PROGRESS_BLOB_PATH || "qingxi/progress/current.json";
 export const BLOB_ACCESS = process.env.QINGXI_BLOB_ACCESS || "private";
 
 export function sendJson(response, status, payload) {
@@ -60,9 +62,14 @@ async function readableStreamToText(stream) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-export async function loadWorkbenchBlob() {
+export function backupBlobPath(kind, date = new Date()) {
+  const stamp = date.toISOString().replace(/[:.]/g, "-");
+  return `qingxi/backups/${kind}/${stamp}.json`;
+}
+
+export async function loadJsonBlob(path) {
   try {
-    const blob = await get(DATA_BLOB_PATH, { access: BLOB_ACCESS });
+    const blob = await get(path, { access: BLOB_ACCESS });
     if (!blob || blob.statusCode === 404) return { exists: false };
     if (blob.statusCode && blob.statusCode !== 200) {
       throw new Error(`Blob 读取失败：HTTP ${blob.statusCode}`);
@@ -72,7 +79,7 @@ export async function loadWorkbenchBlob() {
     return {
       exists: true,
       data: JSON.parse(text),
-      pathname: blob.blob?.pathname || DATA_BLOB_PATH,
+      pathname: blob.blob?.pathname || path,
       etag: blob.blob?.etag || blob.etag || "",
     };
   } catch (error) {
@@ -84,12 +91,20 @@ export async function loadWorkbenchBlob() {
   }
 }
 
-export async function saveWorkbenchBlob(payload) {
-  return put(DATA_BLOB_PATH, JSON.stringify(payload, null, 2), {
+export async function saveJsonBlob(path, payload) {
+  return put(path, JSON.stringify(payload, null, 2), {
     access: BLOB_ACCESS,
     allowOverwrite: true,
     addRandomSuffix: false,
     contentType: "application/json; charset=utf-8",
     cacheControlMaxAge: 60,
   });
+}
+
+export async function loadWorkbenchBlob() {
+  return loadJsonBlob(LEGACY_WORKBENCH_PATH);
+}
+
+export async function saveWorkbenchBlob(payload) {
+  return saveJsonBlob(LEGACY_WORKBENCH_PATH, payload);
 }

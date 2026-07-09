@@ -81,6 +81,30 @@ export interface TodayShootPlan {
   updatedAt: string;
 }
 
+export interface WorkspaceContent {
+  contentPlan: ContentTask[];
+  fullContent: Partial<ContentTask>[];
+  products: ProductCard[];
+  library: Array<{ title: string; html: string }>;
+}
+
+export interface ProgressState {
+  version: number;
+  startDate: string;
+  statuses: Record<number, TaskStatus>;
+  checks: Record<number, Record<string, boolean>>;
+  shotChecks: Record<number, Record<number, ShotCheck>>;
+  todayShootPlan: TodayShootPlan;
+  reviews: Record<number, ReviewData>;
+  manualNotes: Record<string, string>;
+  currentDay: number;
+  importedAt: string;
+  lastSavedAt: string;
+  lastBackupAt: string;
+  lastCloudSavedAt: string;
+  lastCloudLoadedAt: string;
+}
+
 export interface PersistedState {
   version: number;
   startDate: string;

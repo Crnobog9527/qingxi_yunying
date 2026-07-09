@@ -1,5 +1,5 @@
 import { requestHasSession } from "./_session.js";
-import { loadWorkbenchBlob, readJsonBody, saveWorkbenchBlob, sendJson } from "./_storage.js";
+import { loadJsonBlob, PROGRESS_BLOB_PATH, readJsonBody, saveJsonBlob, sendJson } from "./_storage.js";
 
 const DATA_VERSION = 5;
 
@@ -75,9 +75,8 @@ export default async function handler(request, response) {
       return;
     }
 
-    const currentBlob = await loadWorkbenchBlob();
-    const currentPayload = currentBlob.exists ? currentBlob.data : {};
-    const currentState = currentPayload.userState || currentPayload.state || {};
+    const currentBlob = await loadJsonBlob(PROGRESS_BLOB_PATH);
+    const currentState = currentBlob.exists ? currentBlob.data : {};
     const nextState = {
       ...currentState,
       version: DATA_VERSION,
@@ -85,20 +84,10 @@ export default async function handler(request, response) {
       todayShootPlan: mergeTodayShootPlan(currentState.todayShootPlan, patch.todayShootPlan),
     };
     const savedAt = new Date().toISOString();
-    const nextPayload = {
-      ...currentPayload,
-      dataVersion: Math.max(Number(currentPayload.dataVersion || 0), DATA_VERSION),
-      cloudSavedAt: savedAt,
-      userState: {
-        ...nextState,
-        lastCloudSavedAt: savedAt,
-      },
-      state: {
-        ...nextState,
-        lastCloudSavedAt: savedAt,
-      },
-    };
-    const blob = await saveWorkbenchBlob(nextPayload);
+    const blob = await saveJsonBlob(PROGRESS_BLOB_PATH, {
+      ...nextState,
+      lastCloudSavedAt: savedAt,
+    });
 
     sendJson(response, 200, {
       ok: true,

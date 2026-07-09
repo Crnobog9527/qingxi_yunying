@@ -1,6 +1,12 @@
 (() => {
   const DATA = window.QINGXI_DATA;
   const FULL_CONTENT = window.QINGXI_FULL_CONTENT || [];
+  const DEFAULT_CONTENT = {
+    contentPlan: DATA.contentPlan || [],
+    fullContent: FULL_CONTENT,
+    products: DATA.products || [],
+    library: DATA.library || [],
+  };
   const STORE_KEY = "qingxi_xhs_workbench_v1";
   const LEGACY_STORE_KEY = "qingxi-xhs-workbench-v1";
   const DATA_VERSION = 5;
@@ -49,6 +55,7 @@
   let collabPollTimer = null;
   let lastRemoteRevision = "";
   let isPollingCollab = false;
+  let contentStore = loadLocalContent();
   let state = loadState();
 
   function todayIso() {
@@ -129,6 +136,34 @@
         library: {},
       },
     };
+  }
+
+  function normalizeContent(value = {}) {
+    return {
+      contentPlan: Array.isArray(value.contentPlan) && value.contentPlan.length ? value.contentPlan : DEFAULT_CONTENT.contentPlan,
+      fullContent: Array.isArray(value.fullContent) && value.fullContent.length ? value.fullContent : DEFAULT_CONTENT.fullContent,
+      products: Array.isArray(value.products) && value.products.length ? value.products : DEFAULT_CONTENT.products,
+      library: Array.isArray(value.library) && value.library.length ? value.library : DEFAULT_CONTENT.library,
+    };
+  }
+
+  function loadLocalContent() {
+    try {
+      const raw = localStorage.getItem(`${STORE_KEY}_content`);
+      if (!raw) return normalizeContent(DEFAULT_CONTENT);
+      return normalizeContent(JSON.parse(raw));
+    } catch {
+      return normalizeContent(DEFAULT_CONTENT);
+    }
+  }
+
+  function persistContentLocalOnly() {
+    localStorage.setItem(`${STORE_KEY}_content`, JSON.stringify(contentStore));
+  }
+
+  function applyContentPayload(content) {
+    contentStore = normalizeContent(content || DEFAULT_CONTENT);
+    persistContentLocalOnly();
   }
 
   function loadState() {
@@ -241,10 +276,10 @@
   function hasBaseDataOverrides(baseData = {}) {
     if (!baseData || typeof baseData !== "object") return false;
     const pairs = [
-      [baseData.contentPlan, DATA.contentPlan],
-      [baseData.fullContent, FULL_CONTENT],
-      [baseData.products, DATA.products],
-      [baseData.library, DATA.library],
+      [baseData.contentPlan, contentStore.contentPlan],
+      [baseData.fullContent, contentStore.fullContent],
+      [baseData.products, contentStore.products],
+      [baseData.library, contentStore.library],
     ];
     return pairs.some(([incoming, current]) => Array.isArray(incoming)
       && JSON.stringify(incoming) !== JSON.stringify(current));
@@ -359,7 +394,7 @@
   }
 
   function remoteRevision(result) {
-    return result?.etag || result?.data?.cloudSavedAt || result?.data?.userState?.lastCloudSavedAt || result?.data?.state?.lastCloudSavedAt || "";
+    return result?.etag || result?.progressEtag || result?.data?.cloudSavedAt || result?.data?.userState?.lastCloudSavedAt || result?.data?.state?.lastCloudSavedAt || "";
   }
 
   function mergeShotChecks(current = {}, incoming = {}) {
@@ -409,11 +444,11 @@
     if (!isCloudReady() || isPollingCollab || document.visibilityState === "hidden") return false;
     isPollingCollab = true;
     try {
-      const result = await cloudRequest("/api/load-data");
+      const result = await cloudRequest("/api/load-workspace");
       if (!result.exists) return false;
       const revision = remoteRevision(result);
       if (revision && revision === lastRemoteRevision) return false;
-      const remoteState = stateFromDataPayload(result.data);
+      const remoteState = stateFromDataPayload(result.progress || result.data?.userState || result.data?.state || {});
       const changed = mergeRemoteCollab(remoteState);
       lastRemoteRevision = revision || lastRemoteRevision;
       if (changed) {
@@ -451,20 +486,9 @@
     }
   }
 
-  function cloudPayload(savedAt = nowIso()) {
-    return {
-      dataVersion: DATA_VERSION,
-      storageKey: STORE_KEY,
-      cloudSavedAt: savedAt,
-      baseData: {
-        contentPlan: DATA.contentPlan,
-        fullContent: FULL_CONTENT,
-        products: DATA.products,
-        library: DATA.library,
-      },
-      userState: serializableState({ lastCloudSavedAt: savedAt }),
-      state: serializableState({ lastCloudSavedAt: savedAt }),
-    };
+  function progressPayload(metadata = {}) {
+    const { edits, ...progress } = serializableState(metadata);
+    return progress;
   }
 
   async function saveCloudNow({ silent = false } = {}) {
@@ -476,9 +500,9 @@
       setCloudStatus("saving", "正在保存到线上...");
       await pollCollabUpdates({ silent: true, rerender: false });
       const savedAt = nowIso();
-      const result = await cloudRequest("/api/save-data", {
+      const result = await cloudRequest("/api/save-progress", {
         method: "POST",
-        body: JSON.stringify(cloudPayload(savedAt)),
+        body: JSON.stringify({ progress: progressPayload({ lastCloudSavedAt: savedAt }) }),
       });
       state.lastCloudSavedAt = result.savedAt || savedAt;
       persistStateLocalOnly();
@@ -495,6 +519,45 @@
     }
   }
 
+  async function saveContentNow({ silent = true } = {}) {
+    persistContentLocalOnly();
+    if (!isCloudReady()) return false;
+    try {
+      setCloudStatus("saving", "正在保存内容到线上...");
+      const result = await cloudRequest("/api/import-content", {
+        method: "POST",
+        body: JSON.stringify({ content: contentStore }),
+      });
+      setCloudStatus("ok", `内容已保存：${formatDateTime(result.importedAt || nowIso())}`);
+      if (!silent) alert("内容保存成功。");
+      return true;
+    } catch (error) {
+      setCloudStatus("error", error?.message || "内容保存失败。");
+      if (!silent) alert(`内容保存失败：${error?.message || "请稍后重试。"}`);
+      return false;
+    }
+  }
+
+  async function backupCloudNow() {
+    if (!isCloudReady()) {
+      alert("当前环境不能调用线上 API。");
+      return false;
+    }
+    try {
+      setCloudStatus("saving", "正在生成线上备份...");
+      const result = await cloudRequest("/api/backup-now", { method: "POST", body: JSON.stringify({}) });
+      state.lastBackupAt = result.backedUpAt || nowIso();
+      saveState({ lastBackupAt: state.lastBackupAt, skipCloudSave: true });
+      setCloudStatus("ok", `线上备份完成：${formatDateTime(state.lastBackupAt)}`);
+      alert(`线上备份完成：${formatDateTime(state.lastBackupAt)}`);
+      return true;
+    } catch (error) {
+      setCloudStatus("error", error?.message || "线上备份失败。");
+      alert(`线上备份失败：${error?.message || "请稍后重试。"}`);
+      return false;
+    }
+  }
+
   async function loadCloudNow({ silent = false, auto = false } = {}) {
     if (!isCloudReady()) {
       if (!silent) alert("当前环境不能调用线上 API。");
@@ -505,9 +568,16 @@
     }
     try {
       setCloudStatus("loading", "正在读取线上数据...");
-      const result = await cloudRequest("/api/load-data");
+      const result = await cloudRequest("/api/load-workspace");
       if (!result.exists) {
         setCloudStatus("idle", "线上还没有保存数据。");
+        if (auto) {
+          await cloudRequest("/api/import-content", {
+            method: "POST",
+            body: JSON.stringify({ content: contentStore }),
+          });
+          setCloudStatus("ok", "已用当前默认内容初始化线上内容库。");
+        }
         if (!silent && confirm("线上还没有数据。是否把当前本地进度保存到线上？")) {
           await saveCloudNow({ silent: false });
         }
@@ -515,10 +585,15 @@
       }
 
       const loadedAt = nowIso();
-      state = stateFromDataPayload(result.data, {
+      if (!result.content) {
+        await cloudRequest("/api/import-content", {
+          method: "POST",
+          body: JSON.stringify({ content: contentStore }),
+        });
+      }
+      if (result.content) applyContentPayload(result.content);
+      state = stateFromDataPayload(result.progress || result.data?.userState || result.data?.state || {}, {
         lastCloudLoadedAt: loadedAt,
-      }, {
-        applyBaseData: false,
       });
       lastRemoteRevision = remoteRevision(result);
       storageLoadError = null;
@@ -623,12 +698,12 @@
   }
 
   function taskSource() {
-    return DATA.contentPlan.map((task) => getTask(task.day));
+    return contentStore.contentPlan.map((task) => getTask(task.day));
   }
 
   function getTask(day) {
-    const base = DATA.contentPlan.find((item) => item.day === Number(day));
-    const full = FULL_CONTENT.find((item) => item.day === Number(day)) || {};
+    const base = contentStore.contentPlan.find((item) => item.day === Number(day)) || DEFAULT_CONTENT.contentPlan.find((item) => item.day === Number(day)) || {};
+    const full = contentStore.fullContent.find((item) => item.day === Number(day)) || {};
     const enhanced = {
       contentType: full.category || base.rawType,
       topic: full.topic || base.theme,
@@ -652,11 +727,9 @@
       copyFocus: full.titleDirection || base.copyFocus,
       conversion: full.operationJudge || base.conversion,
     };
-    const edit = state.edits?.tasks?.[day] || {};
     const merged = {
       ...base,
       ...enhanced,
-      ...edit,
     };
     return {
       ...merged,
@@ -670,28 +743,25 @@
   }
 
   function productSource() {
-    return DATA.products.map((product, index) => getProduct(index));
+    return contentStore.products.map((product, index) => getProduct(index));
   }
 
   function getProduct(index) {
-    const base = DATA.products[index];
-    const edit = state.edits?.products?.[index] || {};
+    const base = contentStore.products[index] || DEFAULT_CONTENT.products[index] || {};
     return {
       ...base,
-      ...edit,
-      imageKeywords: arrayField(edit.imageKeywords, base.imageKeywords),
-      themes: arrayField(edit.themes, base.themes),
+      imageKeywords: arrayField(base.imageKeywords, []),
+      themes: arrayField(base.themes, []),
     };
   }
 
   function librarySource() {
-    return DATA.library.map((item, index) => getLibraryItem(index));
+    return contentStore.library.map((item, index) => getLibraryItem(index));
   }
 
   function getLibraryItem(index) {
-    const base = DATA.library[index];
-    const edit = state.edits?.library?.[index] || {};
-    return { ...base, ...edit };
+    const base = contentStore.library[index] || DEFAULT_CONTENT.library[index] || {};
+    return { ...base };
   }
 
   function arrayField(value, fallback) {
@@ -720,52 +790,88 @@
   }
 
   function saveTaskEdit(day, values) {
-    state.edits.tasks[day] = {
-      ...(state.edits.tasks[day] || {}),
-      ...values,
+    const index = contentStore.contentPlan.findIndex((item) => item.day === Number(day));
+    if (index >= 0) {
+      contentStore.contentPlan[index] = {
+        ...contentStore.contentPlan[index],
+        rawType: values.contentType || contentStore.contentPlan[index].rawType,
+        category: values.contentType || contentStore.contentPlan[index].category,
+        theme: values.topic || contentStore.contentPlan[index].theme,
+        title: values.highClickTitle || contentStore.contentPlan[index].title,
+        product: values.mainProduct || contentStore.contentPlan[index].product,
+        shootingTask: values.imagePlan?.join("；") || contentStore.contentPlan[index].shootingTask,
+        copyFocus: values.titleDirection || contentStore.contentPlan[index].copyFocus,
+        conversion: values.operationJudge || contentStore.contentPlan[index].conversion,
+        tags: arrayField(values.tags, contentStore.contentPlan[index].tags),
+      };
+    }
+    const fullIndex = contentStore.fullContent.findIndex((item) => item.day === Number(day));
+    const nextFull = {
+      ...(fullIndex >= 0 ? contentStore.fullContent[fullIndex] : { day: Number(day) }),
+      category: values.contentType,
+      topic: values.topic,
+      mainProduct: values.mainProduct,
+      highClickTitle: values.highClickTitle,
+      titleDirection: values.titleDirection,
+      titleReason: values.titleReason,
+      coverText: values.coverText,
+      altTitles: values.altTitles,
+      bodyCopy: values.bodyCopy,
+      imagePlan: values.imagePlan,
+      tags: values.tags,
+      seoReason: values.seoReason,
+      copyReason: values.copyReason,
+      operationJudge: values.operationJudge,
     };
-    saveState();
+    if (fullIndex >= 0) contentStore.fullContent[fullIndex] = nextFull;
+    else contentStore.fullContent.push(nextFull);
+    saveContentNow();
     render();
     openDetail(day);
   }
 
   function resetTaskEdit(day) {
-    delete state.edits.tasks[day];
-    saveState();
+    const defaultBase = DEFAULT_CONTENT.contentPlan.find((item) => item.day === Number(day));
+    const defaultFull = DEFAULT_CONTENT.fullContent.find((item) => item.day === Number(day));
+    const index = contentStore.contentPlan.findIndex((item) => item.day === Number(day));
+    const fullIndex = contentStore.fullContent.findIndex((item) => item.day === Number(day));
+    if (defaultBase && index >= 0) contentStore.contentPlan[index] = defaultBase;
+    if (defaultFull && fullIndex >= 0) contentStore.fullContent[fullIndex] = defaultFull;
+    saveContentNow();
     render();
     openDetail(day);
   }
 
   function saveProductEdit(index, values) {
-    state.edits.products[index] = {
-      ...(state.edits.products[index] || {}),
+    contentStore.products[index] = {
+      ...(contentStore.products[index] || {}),
       ...values,
     };
-    saveState();
+    saveContentNow();
     render();
     openProductEditor(index);
   }
 
   function resetProductEdit(index) {
-    delete state.edits.products[index];
-    saveState();
+    if (DEFAULT_CONTENT.products[index]) contentStore.products[index] = DEFAULT_CONTENT.products[index];
+    saveContentNow();
     render();
     openProductEditor(index);
   }
 
   function saveLibraryEdit(index, values) {
-    state.edits.library[index] = {
-      ...(state.edits.library[index] || {}),
+    contentStore.library[index] = {
+      ...(contentStore.library[index] || {}),
       ...values,
     };
-    saveState();
+    saveContentNow();
     render();
     openLibraryEditor(index);
   }
 
   function resetLibraryEdit(index) {
-    delete state.edits.library[index];
-    saveState();
+    if (DEFAULT_CONTENT.library[index]) contentStore.library[index] = DEFAULT_CONTENT.library[index];
+    saveContentNow();
     render();
     openLibraryEditor(index);
   }
@@ -2148,6 +2254,7 @@
           <div class="notice-actions">
             <button class="btn" data-action="export">导出 JSON</button>
             <button class="ghost-btn" data-action="import">导入 JSON</button>
+            <button class="ghost-btn" data-action="backup-now">线上备份</button>
             <button class="ghost-btn" data-action="logout">退出访问</button>
           </div>
         </div>
@@ -2648,6 +2755,10 @@
         saveCloudNow({ silent: false });
         return;
       }
+      if (action === "backup-now") {
+        backupCloudNow();
+        return;
+      }
       if (action === "confirm-shoot-plan") {
         confirmShootPlan();
         return;
@@ -2798,13 +2909,13 @@
       storageKey: STORE_KEY,
       exportedAt: backupTime,
       baseData: {
-        contentPlan: DATA.contentPlan,
-        fullContent: FULL_CONTENT,
-        products: DATA.products,
-        library: DATA.library,
+        contentPlan: contentStore.contentPlan,
+        fullContent: contentStore.fullContent,
+        products: contentStore.products,
+        library: contentStore.library,
       },
-      userState: serializableState({ lastBackupAt: backupTime }),
-      state: serializableState({ lastBackupAt: backupTime }),
+      userState: progressPayload({ lastBackupAt: backupTime }),
+      state: progressPayload({ lastBackupAt: backupTime }),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -2819,23 +2930,29 @@
   function importJson(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!confirm("导入会覆盖当前本地进度，建议先导出当前备份。是否继续？")) {
+    if (!confirm("导入会更新线上内容文案，但不会清空发布日期、状态和已拍进度。系统会先生成线上备份。是否继续？")) {
       event.target.value = "";
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const parsed = JSON.parse(reader.result);
         const importedAt = nowIso();
-        state = stateFromDataPayload(parsed, {
-          importedAt,
-        });
+        const nextContent = parsed.content || parsed.baseData || parsed;
+        applyContentPayload(nextContent);
+        if (isCloudReady()) {
+          await cloudRequest("/api/import-content", {
+            method: "POST",
+            body: JSON.stringify(parsed),
+          });
+          setCloudStatus("ok", `内容已导入并备份：${formatDateTime(importedAt)}`);
+        }
+        state.importedAt = importedAt;
         storageLoadError = null;
-        saveState({ importedAt, allowOverwriteAfterError: true });
+        saveState({ importedAt, allowOverwriteAfterError: true, skipCloudSave: !isCloudReady() });
         render();
-        const days = Object.keys(state.statuses || {}).length || taskSource().length;
-        alert(`导入成功：导入了 ${days} 天数据。最近保存时间：${formatDateTime(state.lastSavedAt)}。`);
+        alert(`导入成功：导入了 ${taskSource().length} 天内容；发布日期、状态和已拍进度已保留。`);
       } catch (error) {
         alert(`导入失败：${error?.message || "JSON 格式不正确或文件内容不完整。"}`);
       }

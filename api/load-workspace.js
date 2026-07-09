@@ -4,7 +4,7 @@ import { sendJson } from "./_storage.js";
 
 export default async function handler(request, response) {
   if (request.method !== "GET") {
-    sendJson(response, 405, { ok: false, message: "只支持 GET 读取。" });
+    sendJson(response, 405, { ok: false, message: "只支持 GET 读取工作台。" });
     return;
   }
 
@@ -18,19 +18,12 @@ export default async function handler(request, response) {
     sendJson(response, 200, {
       ok: true,
       exists: workspace.contentExists || workspace.progressExists || workspace.legacyExists,
-      data: {
-        dataVersion: 5,
-        baseData: workspace.content,
-        userState: workspace.progress,
-        state: workspace.progress,
-      },
-      etag: `${workspace.contentEtag}:${workspace.progressEtag}`,
-      workspace,
+      ...workspace,
     });
   } catch (error) {
     sendJson(response, 500, {
       ok: false,
-      message: error?.message || "读取线上数据失败。",
+      message: error?.message || "读取工作台数据失败。",
     });
   }
 }
