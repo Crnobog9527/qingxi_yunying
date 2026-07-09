@@ -349,7 +349,10 @@
       redirectToLogin();
     }
     if (!response.ok || payload.ok === false) {
-      throw new Error(payload.message || `请求失败：${response.status}`);
+      const error = new Error(payload.message || `请求失败：${response.status}`);
+      error.status = response.status;
+      error.code = payload.code || "";
+      throw error;
     }
     return payload;
   }
@@ -482,8 +485,11 @@
       if (!silent) alert(`线上保存成功：${formatDateTime(state.lastCloudSavedAt)}`);
       return true;
     } catch (error) {
-      setCloudStatus("error", error?.message || "线上保存失败。");
-      if (!silent) alert(`线上保存失败：${error?.message || "请稍后重试。"}`);
+      const message = error?.status === 409
+        ? "线上已有进度，当前页面还没读取成功，已阻止覆盖。请刷新或点击读取线上数据。"
+        : error?.message || "线上保存失败。";
+      setCloudStatus("error", message);
+      if (!silent) alert(`线上保存失败：${message}`);
       return false;
     }
   }
