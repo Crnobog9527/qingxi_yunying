@@ -6,7 +6,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "竹涧龙吟（绿茶）",
     "highClickTitle": "去斑竹林之前，先看这篇｜清熙小院怎么玩不踩坑",
     "titleDirection": "搜索词前置+实用价值。'成都周边半日游'直接命中搜索意图，'不踩坑'制造点击诱因。",
-    "titleReason": "",
     "coverText": "斑竹林半日游不踩坑",
     "altTitles": [
       "新津斑竹林+小院喝茶，这样安排最舒服",
@@ -16,11 +15,11 @@ window.QINGXI_FULL_CONTENT = [
     "bodyCopy": "去新津斑竹林的朋友，这篇可以存一下，来之前看完少走弯路。\n\n清熙小院就在景区里面，出竹林走几步就到，不用绕路、不用另外导航。景区门口有停车场，开车来很方便（亲测好停，这点我们很满意）。\n\n营业时间：周二到周日，10:00-18:00，周一休息。\n\n怎么玩最舒服——\n建议先进竹林走一走，早上光线干净，拍照很出片。走累了再来小院坐下来，茶饮+点心盒，坐到下午慢慢走，不用把行程排太满。这里不是赶场打卡的地方，来了就是让你把剩下的时间慢慢用掉。\n\n第一次来喝什么——\n推荐竹涧龙吟，绿茶，清爽，和竹林气质很搭。不确定的可以私信我，告诉我几个人来、大概口味偏好，我帮你搭。\n\n周末建议提前私信占好位置，工作日随来随坐，好位置更容易拿到。\n\n评论区问我，看到都回。",
     "imagePlan": [
       "封面：竹林茶席+清爽绿茶，画面有停留感。",
-      "图2：斑竹林路线信息 6 宫格",
-      "图3：斑竹林公园入口/竹林步道。",
-      "图4：从公园走到小院的过渡画面。",
-      "图5：小院门头/入口。",
-      "图6：茶饮上桌全桌面。",
+      "图2：斑竹林公园入口/竹林步道。",
+      "图3：从公园走到小院的过渡画面。",
+      "图4：小院门头/入口。",
+      "图5：茶饮上桌全桌面。",
+      "图6：停车场位置方位感照片。",
       "图7：朋友坐下喝茶聊天。",
       "图8：路线+实用信息图。"
     ],
@@ -43,7 +42,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "胭脂砌玉（花草茶）",
     "highClickTitle": "新津斑竹林拍照攻略｜这5个机位我每次都拍到手软",
     "titleDirection": "地域词+收藏型标题。拍照攻略是小红书强收藏内容，直接说机位和出片率。",
-    "titleReason": "",
     "coverText": "竹林出片机位在这里",
     "altTitles": [
       "去斑竹林拍照，这几个角度别错过",
@@ -80,7 +78,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "百香果菠萝夏日特饮",
     "highClickTitle": "从成都开车来新津喝茶值不值？我来告诉你",
     "titleDirection": "疑问式标题+实测背书。直接解决成都用户最大顾虑——距离成本。",
-    "titleReason": "",
     "coverText": "从成都来新津值不值",
     "altTitles": [
       "成都到新津40分钟，这个下午值得来",
@@ -117,7 +114,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "胭脂砌玉",
     "highClickTitle": "来小院不会摆pose？6个动作照着做，基本张张出片",
     "titleDirection": "痛点解决+数字+承诺。'不会摆pose'强共鸣，'6个动作''张张出片'给确定性。",
-    "titleReason": "",
     "coverText": "不会摆照着做就行",
     "altTitles": [
       "小院拍照不用摆太用力，这几个动作最自然",
@@ -154,7 +150,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "古木流翠",
     "highClickTitle": "逛完斑竹林别急着走｜顺路来小院坐坐，这样安排最舒服",
     "titleDirection": "纠正行为+替代方案。'别只逛竹林'制造点击冲动，'这样安排'给出路线价值。",
-    "titleReason": "",
     "coverText": "斑竹林别只逛公园",
     "altTitles": [
       "斑竹林公园里有个小院，走出竹林就到，别错过",
@@ -191,7 +186,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "7款茶饮全览",
     "highClickTitle": "清熙小院7款茶怎么选？照着这个对号入座就行",
     "titleDirection": "决策辅助+对号入座。解决新客选茶困惑，把选择变成轻松的匹配。",
-    "titleReason": "",
     "coverText": "7款茶按心情怎么选",
     "altTitles": [
       "小院有7款茶，不知道选哪个看这里",
@@ -228,7 +222,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "同一个小院，不同时间来差好多｜附出片时间表",
     "titleDirection": "对比信息+收藏价值。时段差异制造信息增量，'时间表'强化实用收藏属性。",
-    "titleReason": "",
     "coverText": "出片时间表收藏一下",
     "altTitles": [
       "来小院几点拍照最好？我帮你测好了",
@@ -265,7 +258,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "松窗听雪（白茶）",
     "highClickTitle": "工作日来小院比周末爽多了｜位置、光线、安静度全碾压",
     "titleDirection": "比较级标题+实测背书。直接说工作日更好，用具体维度提供信息价值。",
-    "titleReason": "",
     "coverText": "工作日来才知道有多爽",
     "altTitles": [
       "工作日来小院 vs 周末，差别真的很大",
@@ -302,7 +294,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "胭脂砌玉（花草茶）",
     "highClickTitle": "第一杯点这个准没错｜胭脂砌玉花草茶真实体验",
     "titleDirection": "主理人推荐+确定性。'第一杯''准没错'给新客明确决策锚点。",
-    "titleReason": "",
     "coverText": "第一杯点这个准没错",
     "altTitles": [
       "胭脂砌玉真的值得点，放在花园里随手拍都好看",
@@ -339,7 +330,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "成都新津有个竹林小院，开了才知道这种慢，多难得",
     "titleDirection": "主理人情绪+稀缺感。用开店后的真实感受带出品牌气质，'难得'制造价值感。",
-    "titleReason": "",
     "coverText": "竹林里的慢，多难得",
     "altTitles": [
       "在斑竹林开了一家小院，我们想做的就是这样",
@@ -376,7 +366,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "第一次来清熙小院｜停车/预约/几个人怎么坐，全在这篇",
     "titleDirection": "信息完整型置顶攻略。列举具体问题解决点，收藏动机强。",
-    "titleReason": "",
     "coverText": "清熙小院新客全攻略",
     "altTitles": [
       "清熙小院新客攻略，看这一篇就够了",
@@ -413,7 +402,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "朱栏晚照（红茶）",
     "highClickTitle": "和朋友来小院，这几张合照最好拍｜2-4人实测",
     "titleDirection": "场景精准+实拍背书。'2-4人'明确人群，'合照最好拍'直接给价值。",
-    "titleReason": "",
     "coverText": "2-4人合照这样拍",
     "altTitles": [
       "和闺蜜来小院，合照比咖啡馆好拍太多了",
@@ -450,7 +438,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "百香果菠萝夏日特饮",
     "highClickTitle": "夏天逛完竹林又热又渴？这杯百香果菠萝刚好",
     "titleDirection": "场景痛点+解决方案。夏天逛景区出汗是真实痛点，'刚好'给出解决方案。",
-    "titleReason": "",
     "coverText": "逛完竹林来一杯",
     "altTitles": [
       "夏天来小院，第一杯选这个不会错",
@@ -487,7 +474,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "工作日在小院拍到喜欢的照片，可以来抽一张留影签",
     "titleDirection": "轻互动+非促销感。'拍到喜欢的照片'是条件，'回访签'比优惠券高级感更强。",
-    "titleReason": "",
     "coverText": "小院留影签",
     "altTitles": [
       "在小院留一张照片，也留一张回访签",
@@ -524,7 +510,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "古木流翠（生普）",
     "highClickTitle": "两个90后女生，为什么跑到竹林里开茶馆",
     "titleDirection": "人物反差+动机悬念。'90后女生'+'竹林开茶馆'自带反差，'为什么'驱动点击。",
-    "titleReason": "",
     "coverText": "两个女生的竹林小院",
     "altTitles": [
       "在斑竹林开小院，是我们做过最慢的一件事",
@@ -561,7 +546,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "三档套餐",
     "highClickTitle": "几个人来小院怎么点？1-3人/4-6人/7-8人一次说清楚",
     "titleDirection": "决策信息型标题。数字清晰，解决最高频私信问题，强收藏。",
-    "titleReason": "",
     "coverText": "几个人来怎么点一次讲清",
     "altTitles": [
       "来小院几个人怎么安排，看这一篇",
@@ -598,7 +582,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "有人坐着的小院，比空景更好看",
     "titleDirection": "审美判断型标题。反常识感制造点击好奇，'空景'vs'有人'的比较建立真实感。",
-    "titleReason": "",
     "coverText": "有人坐着才更好看",
     "altTitles": [
       "小院最好看的时候，是有人真的放松下来",
@@ -635,7 +618,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "石髓漱风（岩茶）",
     "highClickTitle": "开小院三周了，最难的事跟装修好不好看没关系",
     "titleDirection": "反预期+真实感。'跟装修没关系'打破表面美学预期，点击诱因强。",
-    "titleReason": "",
     "coverText": "开小院最难的事",
     "altTitles": [
       "小院好看只是开始，每天把它维护好才是真的难",
@@ -672,7 +654,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "朱栏晚照（红茶）",
     "highClickTitle": "带妈妈来新津斑竹林，回程前来小院坐坐｜亲子半日游路线",
     "titleDirection": "场景精准+路线价值。'带妈妈'明确人群，'回程前坐坐'降低决策门槛。",
-    "titleReason": "",
     "coverText": "带妈妈来这里坐坐",
     "altTitles": [
       "和妈妈逛完斑竹林，来这里喝茶，她很喜欢",
@@ -709,7 +690,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "竹涧龙吟（绿茶）",
     "highClickTitle": "想坐竹林边最好的位置？工作日来，提前私信留",
     "titleDirection": "权益感但非促销。'最好的位置'是稀缺资源，'提前私信留'给出具体行动。",
-    "titleReason": "",
     "coverText": "好位置工作日更容易拿",
     "altTitles": [
       "工作日来小院，好位置更容易是你的",
@@ -746,7 +726,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "古木流翠（生普）",
     "highClickTitle": "坐在竹影下喝一壶生普是什么感觉？古木流翠实测",
     "titleDirection": "体验好奇型标题。'是什么感觉'驱动点击好奇，'实测'增加可信度。",
-    "titleReason": "",
     "coverText": "竹影下喝这杯生普",
     "altTitles": [
       "不想喝甜的，来小院试试这杯生普",
@@ -783,7 +762,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "松窗听雪（白茶）",
     "highClickTitle": "有人问小院有什么可以玩的——坦白说，没太多",
     "titleDirection": "坦诚反转型标题。承认没节目，反而制造真实感和筛选效果。",
-    "titleReason": "",
     "coverText": "坦白说没什么节目",
     "altTitles": [
       "小院现在没有很多活动，但这本来就是我们想要的",
@@ -820,7 +798,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "胭脂砌玉（花草茶）",
     "highClickTitle": "开了一个多月，客人最爱拍的5个角度我总结出来了",
     "titleDirection": "真实反馈+数字。'客人最喜欢'比'推荐机位'更可信，有真实体验背书。",
-    "titleReason": "",
     "coverText": "客人最爱这5个角度",
     "altTitles": [
       "来小院拍照，这几张照着拍就行",
@@ -857,7 +834,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "陈仓暮色（熟普）",
     "highClickTitle": "下雨天来小院，意外发现比晴天更好",
     "titleDirection": "天气反转+意外发现。把雨天从阻碍变成体验优势，'意外发现'制造好奇。",
-    "titleReason": "",
     "coverText": "雨天来比晴天更好",
     "altTitles": [
       "今天下雨，刚好来了小院",
@@ -885,7 +861,8 @@ window.QINGXI_FULL_CONTENT = [
     ],
     "seoReason": "'雨天去哪儿'是天气场景词，实时发布效果最好；'安静的地方'承接情绪搜索。",
     "copyReason": "机动内容，遇阴雨天优先发布，把天气劣势变卖点。晴天这个坑位可以替换为备用内容。",
-    "operationJudge": "雨天发布看即时咨询。有人问'今天开吗/雨天能坐吗'说明内容有现实转化。"
+    "operationJudge": "雨天发布看即时咨询。有人问'今天开吗/雨天能坐吗'说明内容有现实转化。",
+    "note": "机动发布——遇阴雨天优先插入，晴天跳过改发备用内容"
   },
   {
     "day": 25,
@@ -894,7 +871,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "百香果菠萝夏日特饮+竹涧龙吟",
     "highClickTitle": "夏天来小院，清爽喝法怎么选？两款对比给你参考",
     "titleDirection": "对比决策型标题。'怎么选'是搜索意图，'两款对比'降低决策成本。",
-    "titleReason": "",
     "coverText": "夏天清爽选法对比",
     "altTitles": [
       "夏天来小院想喝清爽一点，这两款哪个适合你",
@@ -931,7 +907,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "斑竹林+清熙小院，成都人的周末半日游怎么安排最值",
     "titleDirection": "搜索型标题+价值判断。'成都人''最值'锁定本地人群，覆盖高频搜索词。",
-    "titleReason": "",
     "coverText": "周末半日游怎么安排最值",
     "altTitles": [
       "成都周末半日游｜斑竹林+小院喝茶完整路线",
@@ -968,7 +943,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "松窗听雪（白茶）",
     "highClickTitle": "这家小院，不太适合赶时间的人",
     "titleDirection": "反向筛选型标题。'不适合谁'比'适合谁'更有停顿感和态度，筛选精准客群。",
-    "titleReason": "",
     "coverText": "不适合赶时间的人",
     "altTitles": [
       "不赶时间的人，会比较喜欢这里",
@@ -1005,7 +979,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "这个周末，小院来了很多温柔的人",
     "titleDirection": "经营日记+情绪收束。不炫热闹，用'温柔的人'建立用户共同体。",
-    "titleReason": "",
     "coverText": "周末来了很多温柔的人",
     "altTitles": [
       "周末结束，小院又安静下来了",
@@ -1042,7 +1015,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "朱栏晚照（红茶）",
     "highClickTitle": "下午三点后来小院，我一般会推荐这杯红茶｜朱栏晚照实测",
     "titleDirection": "时段绑定+主理人推荐。下午茶时段精准绑定，'实测'增加可信度。",
-    "titleReason": "",
     "coverText": "下午三点后喝这杯",
     "altTitles": [
       "朱栏晚照，小院下午最适合的一杯红茶",
@@ -1079,7 +1051,6 @@ window.QINGXI_FULL_CONTENT = [
     "mainProduct": "任意茶饮",
     "highClickTitle": "开小院一个月，我越来越确定一件事",
     "titleDirection": "月度成长+悬念。'越来越确定一件事'有阅读悬念，主理人口吻有连续追更感。",
-    "titleReason": "",
     "coverText": "开小院一个月后",
     "altTitles": [
       "一个月了，我更确定小院应该慢一点",

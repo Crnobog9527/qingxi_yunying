@@ -906,18 +906,22 @@
   }
 
   function classifyShot(text, task = {}) {
-    const source = `${text} ${task.theme || ""} ${task.highClickTitle || task.title || ""}`;
+    const source = String(text || "");
+    const productContext = `${task.mainProduct || ""} ${task.product || ""}`;
     const groups = [
-      { label: "竹林/小院环境", tone: "green", priority: 96, keywords: ["竹林", "竹影", "竹", "小院整体", "环境"] },
-      { label: "小院入口/路线", tone: "blue", priority: 88, keywords: ["入口", "门头", "门帘", "路线", "动线", "过渡", "到店", "公园"] },
-      { label: "茶席桌面", tone: "tea", priority: 92, keywords: ["茶席", "茶桌", "桌面", "桌上", "俯拍"] },
-      { label: "茶饮特写", tone: "tea", priority: 84, keywords: ["茶饮", "茶汤", "茶杯", "拿杯", "特写", "胭脂", "竹涧", "松窗", "古木", "百香果"] },
-      { label: "点心盒/食物", tone: "tea", priority: 76, keywords: ["点心", "点心盒", "水果", "干果", "茶点"] },
-      { label: "人物体验", tone: "warm", priority: 90, keywords: ["女生", "朋友", "聊天", "主理人", "背影", "人物", "客人", "手部", "合影"] },
-      { label: "花园/户外氛围", tone: "green", priority: 78, keywords: ["花园", "花", "户外", "院子", "空院"] },
-      { label: "信息说明图", tone: "blue", priority: 58, keywords: ["信息图", "说明", "提醒", "小卡", "清单", "预约", "人数"] },
+      { label: "信息说明图", tone: "blue", priority: 58, keywords: ["信息图", "说明", "提醒", "汇总", "清单", "预约", "人数", "文字图", "时间表", "指南", "小卡", "对比", "收尾"] },
+      { label: "小院入口/路线", tone: "blue", priority: 88, keywords: ["入口", "门头", "门帘", "路线", "动线", "过渡", "到店", "公园", "车窗", "停车", "位置"] },
+      { label: "茶席桌面", tone: "tea", priority: 92, keywords: ["茶席", "茶桌", "桌面", "桌上", "俯拍", "摆桌", "全桌", "套餐", "座位", "同框"] },
+      { label: "茶饮特写", tone: "tea", priority: 84, keywords: ["茶饮", "茶汤", "茶杯", "拿杯", "倒茶", "特写", "冰块", "果肉", "薄荷", "柠檬", "胭脂", "竹涧", "松窗", "古木", "百香果", "朱栏", "陈仓", "石髓"] },
+      { label: "点心盒/食物", tone: "tea", priority: 76, keywords: ["点心", "点心盒", "水果", "干果", "茶点", "食物"] },
+      { label: "人物体验", tone: "warm", priority: 90, keywords: ["女生", "朋友", "聊天", "主理人", "背影", "人物", "客人", "手部", "合影", "动作", "模特", "发呆", "翻书", "坐下", "低头", "喝茶", "小聚", "体验"] },
+      { label: "花园/户外氛围", tone: "green", priority: 78, keywords: ["花园", "花", "户外", "院子", "空院", "空镜", "光线", "暖光", "雨", "屋檐", "傍晚", "上午", "中午", "氛围"] },
+      { label: "竹林/小院环境", tone: "green", priority: 96, keywords: ["竹林", "竹影", "小院全景", "环境", "远景"] },
     ];
     const match = groups.find((group) => group.keywords.some((keyword) => source.includes(keyword)));
+    if (!match && /本篇|主推|茶饮|产品/.test(source) && productContext) {
+      return groups.find((group) => group.label === "茶饮特写");
+    }
     return match || { label: "特殊补拍", tone: "gray", priority: 40, keywords: [] };
   }
 
