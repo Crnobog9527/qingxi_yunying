@@ -5,9 +5,14 @@ export const CONTENT_BLOB_PATH = process.env.QINGXI_CONTENT_BLOB_PATH || "qingxi
 export const PROGRESS_BLOB_PATH = process.env.QINGXI_PROGRESS_BLOB_PATH || "qingxi/progress/current.json";
 export const BLOB_ACCESS = process.env.QINGXI_BLOB_ACCESS || "private";
 
+export function isBlobBackend() {
+  return process.env.QINGXI_STORAGE_BACKEND !== "neon";
+}
+
 export function sendJson(response, status, payload) {
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.setHeader("Cache-Control", "private, no-store");
   response.end(JSON.stringify(payload));
 }
 
@@ -17,8 +22,12 @@ export async function readJsonBody(request) {
   }
 
   const chunks = [];
+  let total = 0;
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (total > 2 * 1024 * 1024) throw new Error("请求体过大。");
+    chunks.push(buffer);
   }
   const text = Buffer.concat(chunks).toString("utf8");
   if (!text.trim()) return {};

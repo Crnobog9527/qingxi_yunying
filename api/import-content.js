@@ -1,6 +1,6 @@
 import { requestHasSession } from "./_session.js";
 import { backupIfExists, DATA_VERSION, hasContent, normalizeContentPayload, nowIso } from "./_workspace.js";
-import { CONTENT_BLOB_PATH, PROGRESS_BLOB_PATH, readJsonBody, saveJsonBlob, sendJson } from "./_storage.js";
+import { CONTENT_BLOB_PATH, PROGRESS_BLOB_PATH, isBlobBackend, readJsonBody, saveJsonBlob, sendJson } from "./_storage.js";
 
 export default async function handler(request, response) {
   if (request.method !== "POST") {
@@ -12,6 +12,7 @@ export default async function handler(request, response) {
     sendJson(response, 401, { ok: false, message: "请先输入访问密码。" });
     return;
   }
+  if (!isBlobBackend()) return sendJson(response, 409, { ok: false, message: "Neon 模式请使用内容预览和提交接口。" });
 
   try {
     const payload = await readJsonBody(request);

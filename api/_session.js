@@ -18,25 +18,31 @@ export function safeEqual(a, b) {
   return timingSafeEqual(left, right);
 }
 
-export function createSessionToken(now = Date.now()) {
+export function createSessionToken(now = Date.now(), context = {}) {
   const secret = getSessionSecret();
   if (!secret) throw new Error("服务端未设置访问密码或会话密钥。");
   const payload = Buffer.from(JSON.stringify({
     iat: now,
     exp: now + SESSION_MAX_AGE * 1000,
+    actorId: context.actorId || "legacy-shared",
+    role: context.role || "owner",
   })).toString("base64url");
   const signature = sign(payload, secret);
   return `${payload}.${signature}`;
 }
 
 export function verifySessionToken(token) {
+  return Boolean(getSessionPayload(token));
+}
+
+export function getSessionPayload(token) {
   const secret = getSessionSecret();
   if (!secret || !token || !token.includes(".")) return false;
   const [payload, signature] = token.split(".");
   if (!payload || !signature || !safeEqual(signature, sign(payload, secret))) return false;
   try {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return Number(parsed.exp) > Date.now();
+    return Number(parsed.exp) > Date.now() ? parsed : null;
   } catch {
     return false;
   }
@@ -62,11 +68,17 @@ export function clearCookieHeader() {
 }
 
 export function requestHasSession(request) {
+  return Boolean(getSessionContext(request));
+}
+
+export function getSessionContext(request) {
   const cookie = request.headers.cookie || "";
   const token = cookie
     .split(";")
     .map((item) => item.trim())
     .find((item) => item.startsWith(`${SESSION_COOKIE}=`))
     ?.slice(SESSION_COOKIE.length + 1);
-  return verifySessionToken(token);
+  const payload = getSessionPayload(token);
+  if (!payload) return null;
+  return { actorId: payload.actorId || "legacy-shared", role: payload.role || "owner" };
 }

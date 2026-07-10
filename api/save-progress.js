@@ -1,5 +1,5 @@
 import { requestHasSession } from "./_session.js";
-import { loadJsonBlob, PROGRESS_BLOB_PATH, readJsonBody, saveJsonBlob, sendJson } from "./_storage.js";
+import { isBlobBackend, loadJsonBlob, PROGRESS_BLOB_PATH, readJsonBody, saveJsonBlob, sendJson } from "./_storage.js";
 import { DATA_VERSION, mergeProgress, nowIso, progressFromState } from "./_workspace.js";
 
 export default async function handler(request, response) {
@@ -12,6 +12,7 @@ export default async function handler(request, response) {
     sendJson(response, 401, { ok: false, message: "请先输入访问密码。" });
     return;
   }
+  if (!isBlobBackend()) return sendJson(response, 409, { ok: false, message: "Neon 模式只允许字段级更新。" });
 
   try {
     const payload = await readJsonBody(request);

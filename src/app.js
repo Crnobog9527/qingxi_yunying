@@ -54,6 +54,9 @@
   };
   let collabPollTimer = null;
   let lastRemoteRevision = "";
+  let backendMode = "blob";
+  let changeCursor = 0;
+  const neonVersions = { progress: {}, shots: {}, reviews: {}, workspace: 0 };
   let isPollingCollab = false;
   let contentStore = loadLocalContent();
   let state = loadState();
@@ -365,6 +368,7 @@
 
   function scheduleCloudSave() {
     if (!isCloudReady()) return;
+    if (backendMode === "neon") return;
     setCloudStatus("saving", "已记录更改，正在自动保存到线上...");
     window.clearTimeout(cloudSaveTimer);
     cloudSaveTimer = window.setTimeout(() => {
@@ -444,6 +448,35 @@
     if (!isCloudReady() || isPollingCollab || document.visibilityState === "hidden") return false;
     isPollingCollab = true;
     try {
+      if (backendMode === "neon") {
+        const result = await cloudRequest(`/api/changes?cursor=${encodeURIComponent(changeCursor)}`);
+        let changed = false;
+        (result.changes || []).forEach((event) => {
+          const fields = event.changed_fields || {};
+          if (event.entity_type === "task_progress") {
+            const day = Number(event.entity_id);
+            if (fields.status !== undefined) state.statuses[day] = fields.status;
+            if (fields.checks !== undefined) state.checks[day] = fields.checks;
+            if (fields.manualNotes !== undefined) state.manualNotes[day] = fields.manualNotes;
+            changed = true;
+          } else if (event.entity_type === "shot_progress") {
+            const [day, index] = String(event.entity_id).split(":").map(Number);
+            state.shotChecks[day] = state.shotChecks[day] || {};
+            state.shotChecks[day][index] = { done: Boolean(fields.done), updatedAt: event.created_at };
+            changed = true;
+          } else if (event.entity_type === "review") {
+            state.reviews[Number(event.entity_id)] = fields.data || fields;
+            changed = true;
+          }
+          changeCursor = Math.max(changeCursor, Number(event.id) || changeCursor);
+        });
+        if (changed) {
+          persistStateLocalOnly();
+          if (rerender) render();
+          setCloudStatus("ok", "已同步同事的最新修改");
+        }
+        return changed;
+      }
       const result = await cloudRequest("/api/load-workspace");
       if (!result.exists) return false;
       const revision = remoteRevision(result);
@@ -467,6 +500,26 @@
   async function saveCollabPatch(patch) {
     if (!isCloudReady()) return false;
     try {
+      if (backendMode === "neon") {
+        for (const [day, shots] of Object.entries(patch.shotChecks || {})) {
+          for (const [index, record] of Object.entries(shots || {})) {
+            const key = `${day}:${index}`;
+            const result = await cloudRequest(`/api/tasks/${day}/shots/${index}`, {
+              method: "PATCH",
+              body: JSON.stringify({ version: neonVersions.shots[key] || 1, changes: { done: Boolean(record.done) } }),
+            });
+            neonVersions.shots[key] = result.shot.version;
+          }
+        }
+        if (patch.todayShootPlan) {
+          const result = await cloudRequest("/api/workspace/state", {
+            method: "PATCH",
+            body: JSON.stringify({ version: neonVersions.workspace || 1, changes: { todayShootPlan: patch.todayShootPlan } }),
+          });
+          neonVersions.workspace = result.state.version;
+        }
+        return true;
+      }
       setCloudStatus("saving", "正在同步拍摄进度...");
       const result = await cloudRequest("/api/save-collab-patch", {
         method: "POST",
@@ -486,6 +539,42 @@
     }
   }
 
+  async function saveNeonTaskProgress(day, changes) {
+    if (backendMode !== "neon" || !isCloudReady()) return false;
+    try {
+      const result = await cloudRequest(`/api/tasks/${day}/progress`, {
+        method: "PATCH",
+        body: JSON.stringify({ version: neonVersions.progress[day] || 1, changes }),
+      });
+      neonVersions.progress[day] = result.progress.version;
+      setCloudStatus("ok", `Day ${day} 已同步`);
+      return true;
+    } catch (error) {
+      const message = error.status === 409 ? `Day ${day} 发生冲突：请先读取同事的最新修改。` : (error.message || "协作保存失败。");
+      setCloudStatus("error", message);
+      alert(message);
+      return false;
+    }
+  }
+
+  async function saveNeonReview(day, data) {
+    if (backendMode !== "neon" || !isCloudReady()) return false;
+    try {
+      const result = await cloudRequest(`/api/tasks/${day}/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ version: neonVersions.reviews[day] || 1, changes: { data } }),
+      });
+      neonVersions.reviews[day] = result.review.version;
+      setCloudStatus("ok", `Day ${day} 复盘已同步`);
+      return true;
+    } catch (error) {
+      const message = error.status === 409 ? `Day ${day} 复盘发生冲突，请先读取最新数据。` : (error.message || "复盘保存失败。");
+      setCloudStatus("error", message);
+      alert(message);
+      return false;
+    }
+  }
+
   function progressPayload(metadata = {}) {
     const { edits, ...progress } = serializableState(metadata);
     return progress;
@@ -497,6 +586,10 @@
       return false;
     }
     try {
+      if (backendMode === "neon") {
+        setCloudStatus("ok", "Neon 已启用字段级保存，无需整份覆盖。");
+        return true;
+      }
       setCloudStatus("saving", "正在保存到线上...");
       await pollCollabUpdates({ silent: true, rerender: false });
       const savedAt = nowIso();
@@ -524,9 +617,9 @@
     if (!isCloudReady()) return false;
     try {
       setCloudStatus("saving", "正在保存内容到线上...");
-      const result = await cloudRequest("/api/import-content", {
+      const result = await cloudRequest(backendMode === "neon" ? "/api/content/import/commit" : "/api/import-content", {
         method: "POST",
-        body: JSON.stringify({ content: contentStore }),
+        body: JSON.stringify({ content: contentStore, importId: `ui-${Date.now()}` }),
       });
       setCloudStatus("ok", `内容已保存：${formatDateTime(result.importedAt || nowIso())}`);
       if (!silent) alert("内容保存成功。");
@@ -569,6 +662,40 @@
     try {
       setCloudStatus("loading", "正在读取线上数据...");
       const result = await cloudRequest("/api/load-workspace");
+      backendMode = result.backend || "blob";
+      if (backendMode === "neon") {
+        if (!result.exists || !result.content) {
+          setCloudStatus("error", "Neon 尚未初始化，请先执行 db:migrate:neon 和 db:seed:neon。");
+          return false;
+        }
+        const content = result.content.data || {};
+        applyContentPayload(content);
+        const next = createDefaultState();
+        (result.tasks || []).forEach((task) => {
+          const day = Number(task.day);
+          next.statuses[day] = task.status || "未开始";
+          next.checks[day] = task.checks || {};
+          next.manualNotes[day] = task.manual_notes || {};
+          next.reviews[day] = task.review || {};
+          next.shotChecks[day] = {};
+          (task.shots || []).forEach((shot) => {
+            next.shotChecks[day][shot.index] = { done: Boolean(shot.done), updatedAt: nowIso() };
+            neonVersions.shots[`${day}:${shot.index}`] = Number(shot.version || 1);
+          });
+          neonVersions.progress[day] = Number(task.progress_version || 1);
+          neonVersions.reviews[day] = Number(task.review_version || 1);
+        });
+        state = normalizeState({ ...next, lastCloudLoadedAt: nowIso() });
+        if (result.state) {
+          state.todayShootPlan = normalizeTodayShootPlan(result.state.today_shoot_plan || {});
+          neonVersions.workspace = Number(result.state.version || 1);
+        }
+        changeCursor = Number(result.cursor || 0);
+        persistStateLocalOnly();
+        setCloudStatus("ok", "已读取 Neon 共享工作区");
+        render();
+        return true;
+      }
       if (!result.exists) {
         setCloudStatus("idle", "线上还没有保存数据。");
         if (auto) {
@@ -687,7 +814,8 @@
   function setStatus(day, status, keepModal = false) {
     state.statuses[day] = status;
     const shotPatch = markAllShotsDoneForStatus(day, status);
-    saveState();
+    saveState({ skipCloudSave: backendMode === "neon" });
+    if (backendMode === "neon") saveNeonTaskProgress(day, { status });
     if (shotPatch) saveCollabPatch({ shotChecks: shotPatch });
     render();
     if (keepModal) openDetail(day);
@@ -879,14 +1007,16 @@
   function setReview(day, field, value, type) {
     state.reviews[day] = state.reviews[day] || {};
     state.reviews[day][field] = type === "number" ? toNumber(value) : value;
-    saveState();
+    saveState({ skipCloudSave: backendMode === "neon" });
+    if (backendMode === "neon") saveNeonReview(day, state.reviews[day]);
     renderDashboardCounters();
   }
 
   function setCheck(day, label, checked) {
     state.checks[day] = state.checks[day] || {};
     state.checks[day][label] = checked;
-    saveState();
+    saveState({ skipCloudSave: backendMode === "neon" });
+    if (backendMode === "neon") saveNeonTaskProgress(day, { checks: state.checks[day] });
   }
 
   function setShotCheck(day, index, checked) {
@@ -894,7 +1024,8 @@
     state.shotChecks[day] = state.shotChecks[day] || {};
     state.shotChecks[day][index] = { done: checked, updatedAt };
     const statusChanged = promoteStatusWhenAllShotsDone(day);
-    saveState({ skipCloudSave: !statusChanged });
+    saveState({ skipCloudSave: true });
+    if (backendMode === "neon" && statusChanged) saveNeonTaskProgress(day, { status: state.statuses[day] });
     saveCollabPatch({
       shotChecks: {
         [day]: {
@@ -2942,9 +3073,9 @@
         const nextContent = parsed.content || parsed.baseData || parsed;
         applyContentPayload(nextContent);
         if (isCloudReady()) {
-          await cloudRequest("/api/import-content", {
+          await cloudRequest(backendMode === "neon" ? "/api/content/import/commit" : "/api/import-content", {
             method: "POST",
-            body: JSON.stringify(parsed),
+            body: JSON.stringify(backendMode === "neon" ? { content: nextContent, importId: `file-${Date.now()}` } : parsed),
           });
           setCloudStatus("ok", `内容已导入并备份：${formatDateTime(importedAt)}`);
         }

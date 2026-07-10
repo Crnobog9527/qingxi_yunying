@@ -92,6 +92,10 @@
       <p>密码通过后会进入工作台，数据会自动从线上读取并自动保存。</p>
       <form id="login-form">
         <label>
+          成员账号（启用成员登录时填写）
+          <input id="username" type="text" autocomplete="username" />
+        </label>
+        <label>
           访问密码
           <input id="password" type="password" autocomplete="current-password" autofocus />
         </label>
@@ -102,6 +106,7 @@
     <script>
       const form = document.getElementById("login-form");
       const password = document.getElementById("password");
+      const username = document.getElementById("username");
       const error = document.getElementById("error");
       const params = new URLSearchParams(window.location.search);
       const next = params.get("next") || "/";
@@ -113,7 +118,7 @@
           const response = await fetch("/api/auth-login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ password: password.value }),
+            body: JSON.stringify({ username: username.value.trim(), password: password.value }),
           });
           const result = await response.json().catch(() => ({}));
           if (!response.ok || !result.ok) throw new Error(result.message || "密码验证失败。");
