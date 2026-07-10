@@ -133,6 +133,14 @@ export async function importContent(content, actorId, importId) {
           version=tasks.version+1, updated_at=now(), updated_by=EXCLUDED.updated_by`, [taskIdValue, WORKSPACE_ID, day, json({ ...item, fullContent: full }), contentId, actorId]);
       await client.query(`INSERT INTO task_progress (task_id, workspace_id, updated_by) VALUES ($1,$2,$3) ON CONFLICT (task_id) DO NOTHING`, [taskIdValue, WORKSPACE_ID, actorId]);
       await client.query(`INSERT INTO reviews (task_id, workspace_id, updated_by) VALUES ($1,$2,$3) ON CONFLICT (task_id) DO NOTHING`, [taskIdValue, WORKSPACE_ID, actorId]);
+      const imagePlan = Array.isArray(full.imagePlan)
+        ? full.imagePlan
+        : (Array.isArray(full.shotPlan) ? full.shotPlan : []);
+      for (let index = 0; index < imagePlan.length; index += 1) {
+        await client.query(`INSERT INTO shot_progress (task_id, workspace_id, shot_index, updated_by)
+          VALUES ($1,$2,$3,$4) ON CONFLICT (task_id, shot_index) DO NOTHING`,
+        [taskIdValue, WORKSPACE_ID, index, actorId]);
+      }
     }
     await client.query("INSERT INTO import_runs (id, workspace_id, status, counts, completed_at, created_by) VALUES ($1,$2,'committed',$3::jsonb,now(),$4)", [importId, WORKSPACE_ID, json(counts), actorId]);
     await client.query("INSERT INTO activity_log (workspace_id, actor_id, action, entity_type, entity_id, changed_fields) VALUES ($1,$2,'import','content_version',$3,$4::jsonb)", [WORKSPACE_ID, actorId, contentId, json(counts)]);
