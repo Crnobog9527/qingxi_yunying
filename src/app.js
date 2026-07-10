@@ -664,9 +664,25 @@
       const result = await cloudRequest("/api/load-workspace");
       backendMode = result.backend || "blob";
       if (backendMode === "neon") {
-        if (!result.exists || !result.content) {
-          setCloudStatus("error", "Neon 尚未初始化，请先执行 db:migrate:neon 和 db:seed:neon。");
+        if (!result.exists) {
+          setCloudStatus("error", "Neon 尚未完成数据库迁移。");
           return false;
+        }
+        if (!result.content) {
+          if (!auto) {
+            setCloudStatus("error", "Neon 内容库尚未初始化，请先使用自动初始化或导入内容。");
+            return false;
+          }
+          await cloudRequest("/api/content/import/commit", {
+            method: "POST",
+            body: JSON.stringify({ content: contentStore, importId: `bootstrap-${Date.now()}` }),
+          });
+          const initialized = await cloudRequest("/api/load-workspace");
+          if (!initialized.content) throw new Error("Neon 内容初始化后仍未返回内容。");
+          result.content = initialized.content;
+          result.tasks = initialized.tasks;
+          result.state = initialized.state;
+          result.cursor = initialized.cursor;
         }
         const content = result.content.data || {};
         applyContentPayload(content);

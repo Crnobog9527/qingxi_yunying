@@ -111,3 +111,11 @@ CREATE TABLE IF NOT EXISTS import_runs (
 
 CREATE INDEX IF NOT EXISTS activity_log_workspace_cursor_idx ON activity_log (workspace_id, id);
 CREATE INDEX IF NOT EXISTS tasks_workspace_day_idx ON tasks (workspace_id, day);
+
+INSERT INTO workspaces (id, slug, name, updated_by)
+VALUES ('qingxi', 'qingxi-yunying', '清熙小院运营工作台', 'migration')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO workspace_state (workspace_id, updated_by)
+VALUES ('qingxi', 'migration')
+ON CONFLICT (workspace_id) DO NOTHING;
