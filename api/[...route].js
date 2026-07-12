@@ -1,6 +1,6 @@
 import { getSessionContext } from "./_session.js";
 import { requireRole } from "./_authz.js";
-import { isNeonConfigured, query, publicDatabaseError, transaction } from "./_db.js";
+import { bootstrapNeonSchema, isMissingWorkspaceSchema, isNeonConfigured, query, publicDatabaseError, transaction } from "./_db.js";
 import { WORKSPACE_ID, listChanges, loadNeonWorkspace, patchReview, patchShot, patchTaskProgress, importContent } from "./_neon-repository.js";
 import { HttpError, requireObject, validateDay, validateIndex, validatePatch } from "./_validation.js";
 import { isBlobBackend, readJsonBody, sendJson } from "./_storage.js";
@@ -43,7 +43,14 @@ async function handleChanges(request, response) {
   const cursor = Math.max(0, Number(new URL(request.url, "http://localhost").searchParams.get("cursor") || 0));
   if (!Number.isInteger(cursor)) return sendJson(response, 400, { ok: false, message: "cursor 无效。" });
   try {
-    const changes = await listChanges(cursor);
+    let changes;
+    try {
+      changes = await listChanges(cursor);
+    } catch (error) {
+      if (!isMissingWorkspaceSchema(error)) throw error;
+      await bootstrapNeonSchema();
+      changes = await listChanges(cursor);
+    }
     return sendJson(response, 200, { ok: true, changes, cursor: changes.length ? Number(changes.at(-1).id) : cursor });
   } catch {
     return sendJson(response, 503, { ok: false, message: "读取变更失败。" });
