@@ -59,8 +59,9 @@ export async function transaction(callback) {
 }
 
 export function canBootstrapNeonSchema() {
-  return ["preview", "production"].includes(process.env.VERCEL_ENV)
-    && process.env.QINGXI_STORAGE_BACKEND === "neon";
+  // Vercel Functions 不保证把 VERCEL_ENV 注入每一种运行路径；
+  // 调用方只会在确认缺少协作表时触发此函数。
+  return isNeonConfigured();
 }
 
 export function isMissingCollaborationSchema(error) {
@@ -70,7 +71,7 @@ export function isMissingCollaborationSchema(error) {
 }
 
 export async function bootstrapNeonSchema() {
-  if (!canBootstrapNeonSchema()) throw new Error("仅允许在已启用 Neon 的 Vercel 环境初始化数据库结构。");
+  if (!canBootstrapNeonSchema()) throw new Error("Neon 未配置 DATABASE_URL，无法初始化数据库结构。");
   return transaction(async (client) => {
     // 多个页面同时首次打开时，确保只有一个请求执行迁移。
     await client.query("SELECT pg_advisory_xact_lock($1)", [2026071201]);
