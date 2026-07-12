@@ -58,16 +58,17 @@ export async function transaction(callback) {
   }
 }
 
-export function canBootstrapPreviewSchema() {
-  return process.env.VERCEL_ENV === "preview" && process.env.QINGXI_STORAGE_BACKEND === "neon";
+export function canBootstrapNeonSchema() {
+  return ["preview", "production"].includes(process.env.VERCEL_ENV)
+    && process.env.QINGXI_STORAGE_BACKEND === "neon";
 }
 
 export function isMissingWorkspaceSchema(error) {
   return error?.code === "42P01" && /workspaces/i.test(String(error?.message || ""));
 }
 
-export async function bootstrapPreviewSchema() {
-  if (!canBootstrapPreviewSchema()) throw new Error("仅允许在 Neon Preview 环境初始化数据库结构。");
+export async function bootstrapNeonSchema() {
+  if (!canBootstrapNeonSchema()) throw new Error("仅允许在已启用 Neon 的 Vercel 环境初始化数据库结构。");
   return transaction(async (client) => {
     // 多个页面同时首次打开时，确保只有一个请求执行迁移。
     await client.query("SELECT pg_advisory_xact_lock($1)", [2026071201]);
