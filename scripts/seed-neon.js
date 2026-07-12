@@ -55,7 +55,7 @@ try {
     await client.query("INSERT INTO reviews (task_id,workspace_id,updated_by) VALUES ($1,$2,$3) ON CONFLICT (task_id) DO NOTHING", [taskId, "qingxi", actor]);
     const imagePlan = fullItem.imagePlan || fullItem.shotPlan || [];
     for (let index = 0; index < imagePlan.length; index += 1) {
-      await client.query("INSERT INTO shot_progress (task_id,shot_index,updated_by) VALUES ($1,$2,$3) ON CONFLICT (task_id,shot_index) DO NOTHING", [taskId, index, actor]);
+      await client.query("INSERT INTO shot_progress (task_id,workspace_id,shot_index,updated_by) VALUES ($1,$2,$3,$4) ON CONFLICT (task_id,shot_index) DO NOTHING", [taskId, "qingxi", index, actor]);
     }
   }
   await client.query("COMMIT");

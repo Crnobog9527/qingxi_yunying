@@ -1,33 +1,56 @@
 import { Pool } from "@neondatabase/serverless";
 
-let pool;
-
 export function isNeonConfigured() {
   return Boolean(process.env.DATABASE_URL);
 }
 
-export function getPool() {
+function createPool() {
   if (!isNeonConfigured()) throw new Error("Neon 未配置 DATABASE_URL。");
-  pool ||= new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
-  return pool;
+  // Neon 的 WebSocket 连接不能跨 Vercel Serverless 请求复用。
+  return new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 }
 
-export function query(text, values = []) {
-  return getPool().query(text, values);
+function safeErrorSummary(error) {
+  const message = String(error?.message || "unknown database error")
+    .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[redacted-database-url]")
+    .replace(/(password|token)=([^\s&]+)/gi, "$1=[redacted]")
+    .slice(0, 500);
+  return { name: error?.name || "Error", code: error?.code || "unknown", message };
+}
+
+function logDatabaseFailure(operation, error) {
+  // 只记录已脱敏的诊断信息，绝不记录连接串或密钥。
+  console.error("[qingxi-db] operation failed", { operation, ...safeErrorSummary(error) });
+}
+
+export async function query(text, values = []) {
+  const pool = createPool();
+  try {
+    return await pool.query(text, values);
+  } catch (error) {
+    logDatabaseFailure("query", error);
+    throw error;
+  } finally {
+    await pool.end().catch(() => {});
+  }
 }
 
 export async function transaction(callback) {
-  const client = await getPool().connect();
+  const pool = createPool();
+  let client;
   try {
+    client = await pool.connect();
     await client.query("BEGIN");
     const result = await callback(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
+    await client?.query("ROLLBACK").catch(() => {});
+    logDatabaseFailure("transaction", error);
     throw error;
   } finally {
-    client.release();
+    client?.release();
+    await pool.end().catch(() => {});
   }
 }
 
