@@ -1,7 +1,7 @@
 import { requestHasSession } from "./_session.js";
 import { loadWorkspaceData } from "./_workspace.js";
 import { sendJson } from "./_storage.js";
-import { bootstrapNeonSchema, isMissingWorkspaceSchema, isNeonConfigured } from "./_db.js";
+import { bootstrapNeonSchema, isMissingCollaborationSchema, isNeonConfigured } from "./_db.js";
 import { loadNeonWorkspace } from "./_neon-repository.js";
 
 export default async function handler(request, response) {
@@ -25,7 +25,7 @@ export default async function handler(request, response) {
       try {
         workspace = await loadNeonWorkspace();
       } catch (error) {
-        if (!isMissingWorkspaceSchema(error)) throw error;
+        if (!isMissingCollaborationSchema(error)) throw error;
         await bootstrapNeonSchema();
         workspace = await loadNeonWorkspace();
       }

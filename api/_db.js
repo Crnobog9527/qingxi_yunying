@@ -63,8 +63,10 @@ export function canBootstrapNeonSchema() {
     && process.env.QINGXI_STORAGE_BACKEND === "neon";
 }
 
-export function isMissingWorkspaceSchema(error) {
-  return error?.code === "42P01" && /workspaces/i.test(String(error?.message || ""));
+export function isMissingCollaborationSchema(error) {
+  if (error?.code !== "42P01") return false;
+  return /\b(workspaces|content_versions|tasks|task_progress|shot_progress|reviews|workspace_state|activity_log|import_runs|members|schema_migrations)\b/i
+    .test(String(error?.message || ""));
 }
 
 export async function bootstrapNeonSchema() {
