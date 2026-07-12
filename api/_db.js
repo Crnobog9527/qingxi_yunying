@@ -1,4 +1,4 @@
-import { Pool } from "@neondatabase/serverless";
+import { Pool, neon } from "@neondatabase/serverless";
 
 export function isNeonConfigured() {
   return Boolean(process.env.DATABASE_URL);
@@ -8,6 +8,12 @@ function createPool() {
   if (!isNeonConfigured()) throw new Error("Neon 未配置 DATABASE_URL。");
   // Neon 的 WebSocket 连接不能跨 Vercel Serverless 请求复用。
   return new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+}
+
+function createHttpQuery() {
+  if (!isNeonConfigured()) throw new Error("Neon 未配置 DATABASE_URL。");
+  // 单条查询使用 HTTPS，不建立跨请求的 WebSocket 连接。
+  return neon(process.env.DATABASE_URL, { fullResults: true });
 }
 
 function safeErrorSummary(error) {
@@ -24,14 +30,11 @@ function logDatabaseFailure(operation, error) {
 }
 
 export async function query(text, values = []) {
-  const pool = createPool();
   try {
-    return await pool.query(text, values);
+    return await createHttpQuery().query(text, values);
   } catch (error) {
     logDatabaseFailure("query", error);
     throw error;
-  } finally {
-    await pool.end().catch(() => {});
   }
 }
 
