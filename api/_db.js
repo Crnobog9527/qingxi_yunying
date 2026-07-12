@@ -1,4 +1,5 @@
 import { Pool, neon } from "@neondatabase/serverless";
+import { COLLABORATION_SCHEMA_SQL, COLLABORATION_SCHEMA_VERSIONS } from "./_preview-schema.js";
 
 export function isNeonConfigured() {
   return Boolean(process.env.DATABASE_URL);
@@ -55,6 +56,26 @@ export async function transaction(callback) {
     client?.release();
     await pool.end().catch(() => {});
   }
+}
+
+export function canBootstrapPreviewSchema() {
+  return process.env.VERCEL_ENV === "preview" && process.env.QINGXI_STORAGE_BACKEND === "neon";
+}
+
+export function isMissingWorkspaceSchema(error) {
+  return error?.code === "42P01" && /workspaces/i.test(String(error?.message || ""));
+}
+
+export async function bootstrapPreviewSchema() {
+  if (!canBootstrapPreviewSchema()) throw new Error("仅允许在 Neon Preview 环境初始化数据库结构。");
+  return transaction(async (client) => {
+    // 多个页面同时首次打开时，确保只有一个请求执行迁移。
+    await client.query("SELECT pg_advisory_xact_lock($1)", [2026071201]);
+    await client.query(COLLABORATION_SCHEMA_SQL);
+    for (const version of COLLABORATION_SCHEMA_VERSIONS) {
+      await client.query("INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING", [version]);
+    }
+  });
 }
 
 export function publicDatabaseError(error) {

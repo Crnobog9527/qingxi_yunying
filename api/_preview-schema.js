@@ -1,3 +1,4 @@
+export const COLLABORATION_SCHEMA_SQL = String.raw`
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -120,3 +121,9 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO workspace_state (workspace_id, updated_by)
 VALUES ('qingxi', 'migration')
 ON CONFLICT (workspace_id) DO NOTHING;
+`;
+
+export const COLLABORATION_SCHEMA_VERSIONS = [
+  "0001_collaboration",
+  "0002_shot_progress_workspace",
+];

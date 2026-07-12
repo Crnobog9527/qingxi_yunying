@@ -1,7 +1,7 @@
 import { requestHasSession } from "./_session.js";
 import { loadWorkspaceData } from "./_workspace.js";
 import { sendJson } from "./_storage.js";
-import { isNeonConfigured } from "./_db.js";
+import { bootstrapPreviewSchema, isMissingWorkspaceSchema, isNeonConfigured } from "./_db.js";
 import { loadNeonWorkspace } from "./_neon-repository.js";
 
 export default async function handler(request, response) {
@@ -21,7 +21,14 @@ export default async function handler(request, response) {
         sendJson(response, 503, { ok: false, message: "Neon 模式已开启，但 DATABASE_URL 未配置。" });
         return;
       }
-      const workspace = await loadNeonWorkspace();
+      let workspace;
+      try {
+        workspace = await loadNeonWorkspace();
+      } catch (error) {
+        if (!isMissingWorkspaceSchema(error)) throw error;
+        await bootstrapPreviewSchema();
+        workspace = await loadNeonWorkspace();
+      }
       sendJson(response, 200, {
         ok: true,
         backend: "neon",
