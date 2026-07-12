@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "serve": "python3 -m http.server 5173",
-    "build": "rm -rf public && mkdir -p public && cp index.html login.html public/ && cp -R src public/src",
+    "build": "rm -rf public && mkdir -p public && cp index.html login.html favicon.svg public/ && cp -R src public/src",
     "preview": "echo \"Use: pnpm exec vercel dev\"",
     "db:migrate:neon": "node scripts/migrate-neon.js",
     "db:seed:neon": "node scripts/seed-neon.js"
