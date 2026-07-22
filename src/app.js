@@ -64,6 +64,18 @@ function dialogMarkup() {
   return "";
 }
 function bind() {
+  const dialog = document.querySelector(".dialog");
+  if (dialog) {
+    // `open` only makes a dialog visible in normal document flow. Promote it
+    // to the top layer so editing stays anchored to the user's current task.
+    if (dialog.open) dialog.close();
+    dialog.showModal();
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      S.dialog = null;
+      render();
+    }, { once: true });
+  }
   document.querySelectorAll("[data-nav]").forEach((b) => b.addEventListener("click", () => { S.view = b.dataset.nav; S.toast = ""; render(); }));
   document.querySelector("[data-retry]")?.addEventListener("click", load);
   document.querySelector("[data-dismiss]")?.addEventListener("click", () => { S.error = ""; render(); });
