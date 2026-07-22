@@ -16,5 +16,10 @@
   },
   "devDependencies": {
     "vercel": "^54.18.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
