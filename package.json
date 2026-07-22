@@ -7,11 +7,13 @@
   "scripts": {
     "serve": "python3 -m http.server 5173",
     "build": "rm -rf public && mkdir -p public && cp index.html login.html public/ && cp -R src public/src",
-    "preview": "echo \"Use: pnpm exec vercel dev\""
+    "preview": "echo \"Use: pnpm exec vercel dev\"",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "@vercel/blob": "^2.5.0",
-    "@vercel/functions": "^3.7.4"
+    "@vercel/functions": "^3.7.4",
+    "@neondatabase/serverless": "^1.0.2"
   },
   "devDependencies": {
     "vercel": "^54.18.0"
