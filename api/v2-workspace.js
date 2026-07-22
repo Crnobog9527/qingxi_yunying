@@ -14,4 +14,3 @@ export default async function handler(request, response) {
     sendJson(response, /V2 数据结构/.test(String(error?.message || "")) ? 400 : 500, { ok: false, message: error?.message || "V2 工作台请求失败。" });
   }
 }
-

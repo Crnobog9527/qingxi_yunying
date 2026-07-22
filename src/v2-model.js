@@ -21,4 +21,3 @@ export function calculateStats(log = [], now = new Date()) { const entries = log
 export function shootKey(wordId, index) { return wordId + ":" + index; }
 export function isOverdue(note, today = todayShanghai()) { return note?.status === "scheduled" && note?.date && note.date < today; }
 export function clone(value) { return JSON.parse(JSON.stringify(value)); }
-
